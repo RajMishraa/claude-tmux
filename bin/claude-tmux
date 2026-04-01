@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
 SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
@@ -14,7 +14,7 @@ SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
 command -v tmux >/dev/null 2>&1 || {
   echo "Error: tmux is not installed." >&2
   echo "  macOS:  brew install tmux" >&2
-  echo "  Debian: apt install tmux" >&2
+  echo "  Debian: sudo apt install tmux" >&2
   exit 1
 }
 command -v python3 >/dev/null 2>&1 || {
@@ -53,7 +53,17 @@ _generate_uuid() {
   fi
 }
 
-# Atomic JSON write: writes to a temp file then renames into place.
+# Resolve full path to the claude binary so startup scripts work regardless
+# of how PATH is set in the tmux environment (e.g. during launchd restore).
+_claude_bin() {
+  command -v claude 2>/dev/null || {
+    echo "Error: claude CLI not found on PATH." >&2
+    echo "       Install Claude Code: https://claude.ai/code" >&2
+    exit 1
+  }
+}
+
+# Atomic JSON write: write to a temp file then rename into place.
 _json_write() {
   local path="$1"
   local tmp="${path}.tmp.$$"
@@ -104,23 +114,48 @@ _update_session_status() {
   _json_write "$SESSIONS_FILE" status "$name" "$status"
 }
 
-# Write a startup script for a tmux session.
-# Using a file avoids all send-keys timing issues and quoting problems.
-_write_startup_script() {
-  local name="$1" session_id="$2" cwd="$3"
-  shift 3
+# Write a startup script for a new session (uses --session-id).
+# Hardcodes the claude binary path so launchd restores work without PATH setup.
+_write_new_script() {
+  local name="$1" session_id="$2" cwd="$3" claude_bin="$4"
+  shift 4
   local extra_args=("$@")
   local script="${SCRIPTS_DIR}/${name}.sh"
 
   {
     echo "#!/usr/bin/env bash"
     printf 'cd %q 2>/dev/null || cd %q\n' "$cwd" "$HOME"
-    printf 'claude --name %q --session-id %q --dangerously-skip-permissions' "$name" "$session_id"
+    printf '%q --name %q --session-id %q --dangerously-skip-permissions' \
+      "$claude_bin" "$name" "$session_id"
     for arg in "${extra_args[@]}"; do
       printf ' %q' "$arg"
     done
     echo ""
-    # Keep the window alive after claude exits so the user can inspect or restart
+    echo 'echo ""'
+    echo 'echo "claude exited. Type '\''exit'\'' to close this window."'
+    echo 'exec bash -l'
+  } > "$script"
+  chmod +x "$script"
+  echo "$script"
+}
+
+# Write a restore script for an existing session (uses --resume <uuid>).
+# Falls back to a fresh session when uuid is missing (pre-0.2.0 sessions).
+_write_restore_script() {
+  local name="$1" session_id="$2" cwd="$3" claude_bin="$4"
+  local script="${SCRIPTS_DIR}/${name}.sh"
+
+  {
+    echo "#!/usr/bin/env bash"
+    printf 'cd %q 2>/dev/null || cd %q\n' "$cwd" "$HOME"
+    if [[ -n "$session_id" ]]; then
+      printf '%q --resume %q --dangerously-skip-permissions\n' \
+        "$claude_bin" "$session_id"
+    else
+      # No UUID — start fresh (pre-0.2.0 session)
+      printf '%q --name %q --dangerously-skip-permissions\n' \
+        "$claude_bin" "$name"
+    fi
     echo 'echo ""'
     echo 'echo "claude exited. Type '\''exit'\'' to close this window."'
     echo 'exec bash -l'
@@ -182,16 +217,18 @@ cmd_new() {
   fi
 
   local cwd="$PWD"
-  local session_id
+  local session_id claude_bin
   session_id=$(_generate_uuid)
+  claude_bin=$(_claude_bin)
 
   _register_session "$name" "$cwd" "$session_id"
 
   local startup
-  startup=$(_write_startup_script "$name" "$session_id" "$cwd" "${extra_args[@]+"${extra_args[@]}"}")
+  startup=$(_write_new_script "$name" "$session_id" "$cwd" "$claude_bin" \
+    "${extra_args[@]+"${extra_args[@]}"}")
 
   tmux new-session -d -s "$name" -c "$cwd" "$startup"
-  tmux rename-window -t "${name}:0" "claude:${name}"
+  tmux rename-window -t "${name}:0" "claude:${name}" || true
 
   echo "Started claude-tmux session: $name"
   echo "  Session ID  : $session_id"
@@ -251,12 +288,12 @@ if not sessions:
 print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'SESSION ID':<36} CWD")
 print("-" * 110)
 for s in sessions:
-    name      = s["name"]
+    name       = s["name"]
     reg_status = s.get("status", "unknown")
-    state     = "[live]" if name in live else f"[{reg_status}]"
-    created   = s.get("created_at", "")[:19].replace("T", " ")
-    sid       = s.get("session_id", "n/a")
-    cwd       = s.get("cwd", "")
+    state      = "[live]" if name in live else f"[{reg_status}]"
+    created    = s.get("created_at", "")[:19].replace("T", " ")
+    sid        = s.get("session_id", "n/a")
+    cwd        = s.get("cwd", "")
     print(f"{name:<22} {state:<10} {created:<22} {sid:<36} {cwd}")
 PYEOF
 }
@@ -288,23 +325,15 @@ PYEOF
 
   [[ -d "$cwd" ]] || cwd="$HOME"
 
-  local startup
-  startup=$(_write_startup_script "$name" "$session_id" "$cwd")
+  local claude_bin
+  claude_bin=$(_claude_bin)
 
-  # Update startup script to use --resume so conversation history is picked up
-  {
-    echo "#!/usr/bin/env bash"
-    printf 'cd %q 2>/dev/null || cd %q\n' "$cwd" "$HOME"
-    printf 'claude --resume %q --dangerously-skip-permissions\n' "$session_id"
-    echo 'echo ""'
-    echo 'echo "claude exited. Type '\''exit'\'' to close this window."'
-    echo 'exec bash -l'
-  } > "$startup"
-  chmod +x "$startup"
+  local startup
+  startup=$(_write_restore_script "$name" "$session_id" "$cwd" "$claude_bin")
 
   tmux new-session -d -s "$name" -c "$cwd" "$startup"
-  tmux rename-window -t "${name}:0" "claude:${name}"
-  echo "Restored session: $name (id: $session_id, cwd: $cwd)"
+  tmux rename-window -t "${name}:0" "claude:${name}" || true
+  echo "Restored session: $name (id: ${session_id:-n/a}, cwd: $cwd)"
 }
 
 cmd_restore() {
@@ -369,12 +398,12 @@ cmd_kill() {
 subcmd="$1"; shift
 
 case "$subcmd" in
-  new)           cmd_new "$@" ;;
-  attach)        cmd_attach "$@" ;;
-  ls)            cmd_ls ;;
-  restore)       cmd_restore ;;
-  kill)          cmd_kill "$@" ;;
+  new)                  cmd_new "$@" ;;
+  attach)               cmd_attach "$@" ;;
+  ls)                   cmd_ls ;;
+  restore)              cmd_restore ;;
+  kill)                 cmd_kill "$@" ;;
   version|--version|-v) echo "claude-tmux v${VERSION}" ;;
-  help|-h|--help) _usage ;;
+  help|-h|--help)       _usage ;;
   *) echo "Error: unknown subcommand '${subcmd}'" >&2; _usage; exit 1 ;;
 esac

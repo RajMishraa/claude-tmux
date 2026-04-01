@@ -10,6 +10,19 @@ PLIST_PATH="${HOME}/Library/LaunchAgents/com.user.claude-tmux-restore.plist"
 
 echo "Installing claude-tmux..."
 
+# 0. Check prerequisites
+command -v tmux >/dev/null 2>&1 || {
+  echo "Error: tmux is required. Install: brew install tmux" >&2; exit 1
+}
+command -v python3 >/dev/null 2>&1 || {
+  echo "Error: python3 is required." >&2; exit 1
+}
+command -v claude >/dev/null 2>&1 || {
+  echo "Error: claude CLI is required." >&2
+  echo "       Install Claude Code: https://claude.ai/code" >&2
+  exit 1
+}
+
 # 1. Install binary
 mkdir -p "${HOME}/.local/bin"
 cp "${REPO_DIR}/bin/claude-tmux" "${BIN_TARGET}"
