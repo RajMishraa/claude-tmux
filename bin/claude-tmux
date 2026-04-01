@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+# claude-tmux — tmux session manager for Claude Code
+# https://github.com/rajmishra/claude-tmux
+
+set -euo pipefail
+
+SESSIONS_DIR="${HOME}/.claude-tmux"
+SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+_ensure_registry() {
+  mkdir -p "$SESSIONS_DIR"
+  if [[ ! -f "$SESSIONS_FILE" ]]; then
+    echo '{"sessions":[]}' > "$SESSIONS_FILE"
+  fi
+}
+
+_tmux_session_exists() {
+  tmux has-session -t "$1" 2>/dev/null
+}
+
+_register_session() {
+  local name="$1" cwd="$2"
+  local ts
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+  # Remove any existing entry with same name, then append new one
+  python3 - "$SESSIONS_FILE" "$name" "$cwd" "$ts" <<'EOF'
+import json, sys
+
+path, name, cwd, ts = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+with open(path) as f:
+    data = json.load(f)
+
+data["sessions"] = [s for s in data["sessions"] if s["name"] != name]
+data["sessions"].append({
+    "name": name,
+    "cwd": cwd,
+    "created_at": ts,
+    "status": "active"
+})
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+EOF
+}
+
+_update_session_status() {
+  local name="$1" status="$2"
+  python3 - "$SESSIONS_FILE" "$name" "$status" <<'EOF'
+import json, sys
+
+path, name, status = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f:
+    data = json.load(f)
+
+for s in data["sessions"]:
+    if s["name"] == name:
+        s["status"] = status
+        break
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+EOF
+}
+
+_usage() {
+  cat <<EOF
+claude-tmux — tmux session manager for Claude Code
+
+Usage:
+  claude-tmux new -s <name> [-- <claude-args...>]   Create & attach new session
+  claude-tmux attach -s <name>                       Attach to existing session
+  claude-tmux ls                                     List all sessions
+  claude-tmux restore                                Restore active sessions (run at login)
+  claude-tmux kill -s <name>                         Kill a session
+
+Examples:
+  claude-tmux new -s uan-project
+  claude-tmux new -s uan-project -- --model opus
+  claude-tmux attach -s uan-project
+  claude-tmux ls
+EOF
+}
+
+# ── subcommands ───────────────────────────────────────────────────────────────
+
+cmd_new() {
+  local name="" extra_args=()
+  local parsing_claude_args=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session)
+        name="$2"; shift 2 ;;
+      --)
+        parsing_claude_args=true; shift ;;
+      *)
+        if $parsing_claude_args; then
+          extra_args+=("$1")
+        else
+          echo "Unknown option: $1" >&2; exit 1
+        fi
+        shift ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
+
+  _ensure_registry
+
+  if _tmux_session_exists "$name"; then
+    echo "Session '$name' already exists — attaching."
+    tmux attach-session -t "$name"
+    return
+  fi
+
+  local cwd="$PWD"
+  _register_session "$name" "$cwd"
+
+  # Build claude command
+  local claude_cmd="claude --name '$name' --dangerously-skip-permissions"
+  for arg in "${extra_args[@]}"; do
+    claude_cmd+=" '$arg'"
+  done
+
+  # Create detached tmux session in current directory
+  tmux new-session -d -s "$name" -c "$cwd"
+
+  # Set tmux window title
+  tmux rename-window -t "$name" "claude:$name"
+
+  # Run claude inside the session
+  tmux send-keys -t "$name" "$claude_cmd" Enter
+
+  echo "Started claude-tmux session: $name"
+  echo "  Working dir : $cwd"
+  echo "  Resume cmd  : claude-tmux attach -s $name"
+  echo ""
+
+  # Attach
+  tmux attach-session -t "$name"
+}
+
+cmd_attach() {
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session) name="$2"; shift 2 ;;
+      *) echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
+
+  if _tmux_session_exists "$name"; then
+    tmux attach-session -t "$name"
+  else
+    echo "Session '$name' is not running."
+    read -r -p "Restore it? [y/N] " ans
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+      _restore_single "$name"
+    fi
+  fi
+}
+
+cmd_ls() {
+  _ensure_registry
+
+  # Get live tmux sessions
+  local live_sessions=()
+  while IFS= read -r line; do
+    live_sessions+=("$line")
+  done < <(tmux ls -F "#{session_name}" 2>/dev/null || true)
+
+  python3 - "$SESSIONS_FILE" "${live_sessions[*]:-}" <<'EOF'
+import json, sys
+
+path = sys.argv[1]
+live = set(sys.argv[2].split()) if sys.argv[2] else set()
+
+with open(path) as f:
+    data = json.load(f)
+
+sessions = data.get("sessions", [])
+if not sessions:
+    print("No sessions registered.")
+    sys.exit(0)
+
+print(f"{'NAME':<25} {'STATUS':<10} {'CREATED':<22} CWD")
+print("-" * 80)
+for s in sessions:
+    name   = s["name"]
+    status = s.get("status", "unknown")
+    live_tag = "[live]" if name in live else "[stopped]"
+    created = s.get("created_at", "")[:19].replace("T", " ")
+    cwd    = s.get("cwd", "")
+    print(f"{name:<25} {live_tag:<10} {created:<22} {cwd}")
+EOF
+}
+
+_restore_single() {
+  local name="$1"
+  _ensure_registry
+
+  local entry
+  entry=$(python3 - "$SESSIONS_FILE" "$name" <<'EOF'
+import json, sys
+path, name = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+for s in data["sessions"]:
+    if s["name"] == name and s.get("status") == "active":
+        print(s.get("cwd", ""))
+        sys.exit(0)
+sys.exit(1)
+EOF
+) || { echo "No active session named '$name' found in registry." >&2; return 1; }
+
+  local cwd="${entry:-$HOME}"
+  [[ -d "$cwd" ]] || cwd="$HOME"
+
+  tmux new-session -d -s "$name" -c "$cwd"
+  tmux rename-window -t "$name" "claude:$name"
+  tmux send-keys -t "$name" "claude --resume '$name' --dangerously-skip-permissions" Enter
+  echo "Restored session: $name (cwd: $cwd)"
+}
+
+cmd_restore() {
+  _ensure_registry
+
+  local names=()
+  while IFS= read -r n; do
+    names+=("$n")
+  done < <(python3 - "$SESSIONS_FILE" <<'EOF'
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+for s in data.get("sessions", []):
+    if s.get("status") == "active":
+        print(s["name"])
+EOF
+)
+
+  if [[ ${#names[@]} -eq 0 ]]; then
+    echo "No active sessions to restore."
+    return
+  fi
+
+  for name in "${names[@]}"; do
+    if _tmux_session_exists "$name"; then
+      echo "Session '$name' already running — skipping."
+    else
+      _restore_single "$name"
+    fi
+  done
+}
+
+cmd_kill() {
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session) name="$2"; shift 2 ;;
+      *) echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
+
+  if _tmux_session_exists "$name"; then
+    tmux kill-session -t "$name"
+    echo "Killed tmux session: $name"
+  else
+    echo "Session '$name' is not running."
+  fi
+
+  _ensure_registry
+  _update_session_status "$name" "killed"
+  echo "Marked as killed in registry."
+}
+
+# ── entrypoint ────────────────────────────────────────────────────────────────
+
+[[ $# -eq 0 ]] && { _usage; exit 0; }
+
+subcmd="$1"; shift
+
+case "$subcmd" in
+  new)     cmd_new "$@" ;;
+  attach)  cmd_attach "$@" ;;
+  ls)      cmd_ls ;;
+  restore) cmd_restore ;;
+  kill)    cmd_kill "$@" ;;
+  help|-h|--help) _usage ;;
+  *) echo "Unknown subcommand: $subcmd" >&2; _usage; exit 1 ;;
+esac
