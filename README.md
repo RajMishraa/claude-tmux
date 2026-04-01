@@ -49,15 +49,17 @@ claude-tmux new -s uan-project
 ```
 
 - Creates a tmux session named `uan-project`
-- Starts `claude --dangerously-skip-permissions` inside it
-- Attaches your terminal immediately
+- Starts `claude` inside it and attaches your terminal immediately
 - If a session with that name already exists, attaches to it
 
-Pass extra Claude flags after `--`:
+Pass Claude flags directly — no `--` separator needed:
 
 ```bash
-claude-tmux new -s uan-project -- --model opus
+claude-tmux new -s uan-project --dangerously-skip-permissions
+claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
 ```
+
+Flags are stored in the session registry and replayed automatically when the session is restored after a reboot.
 
 ### List all sessions
 
@@ -131,7 +133,8 @@ All sessions are recorded in `~/.claude-tmux/sessions.json`:
       "session_id": "3f2a1b4c-0000-0000-0000-000000000001",
       "cwd": "/Users/you/work/uan",
       "created_at": "2026-04-02T14:30:00Z",
-      "status": "active"
+      "status": "active",
+      "args": ["--dangerously-skip-permissions"]
     }
   ]
 }
@@ -139,7 +142,7 @@ All sessions are recorded in `~/.claude-tmux/sessions.json`:
 
 ### Startup scripts
 
-Each session has a corresponding script at `~/.claude-tmux/scripts/<name>.sh`. On restore, the script uses `claude --resume <uuid>` to pick up the exact conversation. When no UUID is present (sessions created before v0.2.0), it falls back to starting a fresh Claude session with the same name.
+Each session has a corresponding script at `~/.claude-tmux/scripts/<name>.sh`. On restore, the script uses `claude --resume <uuid>` to pick up the exact conversation, replaying any flags (`--dangerously-skip-permissions`, `--model`, etc.) that were passed at creation time. When no UUID is present (sessions created before v0.2.0), it falls back to starting a fresh Claude session with the same name.
 
 ---
 

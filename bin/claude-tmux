@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
 SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
@@ -54,7 +54,7 @@ _generate_uuid() {
 }
 
 # Resolve full path to the claude binary so startup scripts work regardless
-# of how PATH is set in the tmux environment (e.g. during launchd restore).
+# of PATH in the tmux environment (e.g. during launchd restore).
 _claude_bin() {
   command -v claude 2>/dev/null || {
     echo "Error: claude CLI not found on PATH." >&2
@@ -79,15 +79,20 @@ with open(path) as f:
 op = args[0]
 
 if op == "register":
+    # argv: name cwd ts session_id [extra_arg ...]
     name, cwd, ts, session_id = args[1], args[2], args[3], args[4]
+    extra = args[5:]
     data["sessions"] = [s for s in data["sessions"] if s["name"] != name]
-    data["sessions"].append({
+    entry = {
         "name": name,
         "session_id": session_id,
         "cwd": cwd,
         "created_at": ts,
-        "status": "active"
-    })
+        "status": "active",
+    }
+    if extra:
+        entry["args"] = extra
+    data["sessions"].append(entry)
 
 elif op == "status":
     name, status = args[1], args[2]
@@ -103,19 +108,21 @@ PYEOF
 }
 
 _register_session() {
+  # _register_session <name> <cwd> <session_id> [extra_args...]
   local name="$1" cwd="$2" session_id="$3"
+  shift 3
   local ts
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  _json_write "$SESSIONS_FILE" register "$name" "$cwd" "$ts" "$session_id"
+  _json_write "$SESSIONS_FILE" register "$name" "$cwd" "$ts" "$session_id" "$@"
 }
 
 _update_session_status() {
-  local name="$1" status="$2"
-  _json_write "$SESSIONS_FILE" status "$name" "$status"
+  _json_write "$SESSIONS_FILE" status "$1" "$2"
 }
 
 # Write a startup script for a new session (uses --session-id).
 # Hardcodes the claude binary path so launchd restores work without PATH setup.
+# Extra args (e.g. --dangerously-skip-permissions) are passed through as-is.
 _write_new_script() {
   local name="$1" session_id="$2" cwd="$3" claude_bin="$4"
   shift 4
@@ -125,8 +132,7 @@ _write_new_script() {
   {
     echo "#!/usr/bin/env bash"
     printf 'cd %q 2>/dev/null || cd %q\n' "$cwd" "$HOME"
-    printf '%q --name %q --session-id %q --dangerously-skip-permissions' \
-      "$claude_bin" "$name" "$session_id"
+    printf '%q --name %q --session-id %q' "$claude_bin" "$name" "$session_id"
     for arg in "${extra_args[@]}"; do
       printf ' %q' "$arg"
     done
@@ -141,21 +147,26 @@ _write_new_script() {
 
 # Write a restore script for an existing session (uses --resume <uuid>).
 # Falls back to a fresh session when uuid is missing (pre-0.2.0 sessions).
+# Replays the original extra args stored in the registry.
 _write_restore_script() {
   local name="$1" session_id="$2" cwd="$3" claude_bin="$4"
+  shift 4
+  local extra_args=("$@")
   local script="${SCRIPTS_DIR}/${name}.sh"
 
   {
     echo "#!/usr/bin/env bash"
     printf 'cd %q 2>/dev/null || cd %q\n' "$cwd" "$HOME"
     if [[ -n "$session_id" ]]; then
-      printf '%q --resume %q --dangerously-skip-permissions\n' \
-        "$claude_bin" "$session_id"
+      printf '%q --resume %q' "$claude_bin" "$session_id"
     else
       # No UUID — start fresh (pre-0.2.0 session)
-      printf '%q --name %q --dangerously-skip-permissions\n' \
-        "$claude_bin" "$name"
+      printf '%q --name %q' "$claude_bin" "$name"
     fi
+    for arg in "${extra_args[@]}"; do
+      printf ' %q' "$arg"
+    done
+    echo ""
     echo 'echo ""'
     echo 'echo "claude exited. Type '\''exit'\'' to close this window."'
     echo 'exec bash -l'
@@ -170,16 +181,17 @@ claude-tmux v${VERSION} — tmux session manager for Claude Code
 https://github.com/RajMishraa/claude-tmux
 
 Usage:
-  claude-tmux new -s <name> [-- <claude-args...>]   Create & attach new session
-  claude-tmux attach -s <name>                       Attach to existing session
-  claude-tmux ls                                     List all sessions
-  claude-tmux restore                                Restore active sessions (runs at login)
-  claude-tmux kill -s <name>                         Kill a session
-  claude-tmux version                                Print version
+  claude-tmux new -s <name> [<claude-args...>]   Create & attach new session
+  claude-tmux attach -s <name>                   Attach to existing session
+  claude-tmux ls                                 List all sessions
+  claude-tmux restore                            Restore active sessions (runs at login)
+  claude-tmux kill -s <name>                     Kill a session
+  claude-tmux version                            Print version
 
 Examples:
   claude-tmux new -s uan-project
-  claude-tmux new -s uan-project -- --model opus
+  claude-tmux new -s uan-project --dangerously-skip-permissions
+  claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
   claude-tmux attach -s uan-project
   claude-tmux ls
   claude-tmux kill -s uan-project
@@ -190,19 +202,13 @@ EOF
 
 cmd_new() {
   local name="" extra_args=()
-  local parsing_claude_args=false
 
+  # All args except -s/--session are passed directly to claude.
+  # No -- separator needed.
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -s|--session) name="$2"; shift 2 ;;
-      --) parsing_claude_args=true; shift ;;
-      *)
-        if $parsing_claude_args; then
-          extra_args+=("$1")
-        else
-          echo "Error: unknown option '$1'" >&2; exit 1
-        fi
-        shift ;;
+      *) extra_args+=("$1"); shift ;;
     esac
   done
 
@@ -221,7 +227,7 @@ cmd_new() {
   session_id=$(_generate_uuid)
   claude_bin=$(_claude_bin)
 
-  _register_session "$name" "$cwd" "$session_id"
+  _register_session "$name" "$cwd" "$session_id" "${extra_args[@]+"${extra_args[@]}"}"
 
   local startup
   startup=$(_write_new_script "$name" "$session_id" "$cwd" "$claude_bin" \
@@ -256,9 +262,13 @@ cmd_attach() {
     tmux attach-session -t "$name"
   else
     echo "Session '$name' is not running."
-    read -r -p "Restore it? [y/N] " ans
-    if [[ "$ans" =~ ^[Yy]$ ]]; then
-      _restore_single "$name" && tmux attach-session -t "$name"
+    if [[ -t 0 ]]; then
+      read -r -p "Restore it? [y/N] " ans
+      if [[ "$ans" =~ ^[Yy]$ ]]; then
+        _restore_single "$name" && tmux attach-session -t "$name"
+      fi
+    else
+      echo "Run 'claude-tmux restore' to restore it." >&2
     fi
   fi
 }
@@ -302,6 +312,7 @@ _restore_single() {
   local name="$1"
   _ensure_registry
 
+  # Output: line1=session_id, line2=cwd, lines3+=stored args
   local info
   info=$(python3 - "$SESSIONS_FILE" "$name" <<'PYEOF'
 import json, sys
@@ -312,6 +323,8 @@ for s in data["sessions"]:
     if s["name"] == name and s.get("status") == "active":
         print(s.get("session_id", ""))
         print(s.get("cwd", ""))
+        for arg in s.get("args", []):
+            print(arg)
         sys.exit(0)
 print("")
 print("")
@@ -322,14 +335,20 @@ PYEOF
   local session_id cwd
   session_id=$(echo "$info" | sed -n '1p')
   cwd=$(echo "$info" | sed -n '2p')
-
   [[ -d "$cwd" ]] || cwd="$HOME"
+
+  # Read stored args (lines 3+)
+  local extra_args=()
+  while IFS= read -r arg; do
+    [[ -n "$arg" ]] && extra_args+=("$arg")
+  done < <(echo "$info" | tail -n +3)
 
   local claude_bin
   claude_bin=$(_claude_bin)
 
   local startup
-  startup=$(_write_restore_script "$name" "$session_id" "$cwd" "$claude_bin")
+  startup=$(_write_restore_script "$name" "$session_id" "$cwd" "$claude_bin" \
+    "${extra_args[@]+"${extra_args[@]}"}")
 
   tmux new-session -d -s "$name" -c "$cwd" "$startup"
   tmux rename-window -t "${name}:0" "claude:${name}" || true

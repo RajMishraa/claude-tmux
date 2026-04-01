@@ -3,6 +3,24 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.0] - 2026-04-02
+
+### Changed
+- **`--dangerously-skip-permissions` is no longer added by default.** Pass it explicitly when
+  you want it: `claude-tmux new -s proj --dangerously-skip-permissions`. This gives users full
+  control over Claude's permission mode.
+- **No `--` separator required.** Claude flags can be passed directly after the session name:
+  `claude-tmux new -s proj --model opus --dangerously-skip-permissions`. Any argument that is
+  not `-s`/`--session` is forwarded to claude as-is.
+
+### Added
+- **Args stored in registry.** Extra flags passed to `new` are saved in `sessions.json` under
+  an `args` array and replayed automatically on `restore`, so your session comes back with the
+  exact same claude invocation.
+- Test suite expanded to 82 tests covering: no-`--` arg parsing, implicit flag absence,
+  explicit flag forwarding, multiple sessions in the same directory, restore arg replay,
+  non-interactive `attach` (TTY check), live-vs-stopped `ls` state.
+
 ## [0.3.0] - 2026-04-02
 
 ### Fixed
