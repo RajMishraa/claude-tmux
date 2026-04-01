@@ -5,13 +5,13 @@ A tmux session manager for [Claude Code](https://claude.ai/code). Every Claude s
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rajmishra/claude-tmux/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/RajMishraa/claude-tmux/main/install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/rajmishra/claude-tmux
+git clone https://github.com/RajMishraa/claude-tmux
 cd claude-tmux
 ./install.sh
 ```
