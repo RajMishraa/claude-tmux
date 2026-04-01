@@ -51,7 +51,12 @@ cd claude-tmux
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
 
-> **macOS only:** The installer registers a LaunchAgent that automatically restores your sessions on login. Linux users can add `claude-tmux restore` to their shell startup file manually.
+> **macOS:** The installer registers a LaunchAgent that automatically restores your sessions on login.
+>
+> **Linux:** Add this to your `~/.bashrc` or `~/.zshrc` for the same behaviour:
+> ```bash
+> claude-tmux restore &
+> ```
 
 ---
 

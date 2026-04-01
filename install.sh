@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
-# claude-tmux installer
+# claude-tmux installer — works via `curl | bash` or from a local clone
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 BIN_TARGET="${HOME}/.local/bin/claude-tmux"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
-PLIST_PATH="${HOME}/Library/LaunchAgents/com.user.claude-tmux-restore.plist"
 
 echo "Installing claude-tmux..."
 
-# 0. Check prerequisites
+# ── 0. prerequisites ──────────────────────────────────────────────────────────
+
 command -v tmux >/dev/null 2>&1 || {
-  echo "Error: tmux is required. Install: brew install tmux" >&2; exit 1
+  echo "Error: tmux is required." >&2
+  echo "  macOS:  brew install tmux" >&2
+  echo "  Ubuntu: sudo apt install tmux" >&2
+  exit 1
 }
 command -v python3 >/dev/null 2>&1 || {
-  echo "Error: python3 is required." >&2; exit 1
+  echo "Error: python3 is required." >&2
+  exit 1
 }
 command -v claude >/dev/null 2>&1 || {
   echo "Error: claude CLI is required." >&2
@@ -23,22 +27,50 @@ command -v claude >/dev/null 2>&1 || {
   exit 1
 }
 
-# 1. Install binary
+# ── 1. install binary ─────────────────────────────────────────────────────────
+
 mkdir -p "${HOME}/.local/bin"
-cp "${REPO_DIR}/bin/claude-tmux" "${BIN_TARGET}"
+
+# Detect whether we're running from a local clone or piped via curl.
+# BASH_SOURCE[0] is unset (or "-") when piped through bash.
+_script_dir=""
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "-" ]]; then
+  _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+fi
+
+if [[ -n "$_script_dir" && -f "${_script_dir}/bin/claude-tmux" ]]; then
+  # Local clone — copy directly
+  cp "${_script_dir}/bin/claude-tmux" "${BIN_TARGET}"
+else
+  # Remote install — download from GitHub
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "${GITHUB_RAW}/bin/claude-tmux" -o "${BIN_TARGET}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "${BIN_TARGET}" "${GITHUB_RAW}/bin/claude-tmux"
+  else
+    echo "Error: curl or wget is required for remote install." >&2
+    exit 1
+  fi
+fi
+
 chmod +x "${BIN_TARGET}"
 echo "  ✓ Installed binary → ${BIN_TARGET}"
 
-# 2. Create session registry
+# ── 2. session registry ───────────────────────────────────────────────────────
+
 mkdir -p "${SESSIONS_DIR}"
 if [[ ! -f "${SESSIONS_FILE}" ]]; then
   echo '{"sessions":[]}' > "${SESSIONS_FILE}"
 fi
 echo "  ✓ Session registry → ${SESSIONS_FILE}"
 
-# 3. Write launchd plist (auto-restore on login)
-mkdir -p "${HOME}/Library/LaunchAgents"
-cat > "${PLIST_PATH}" <<EOF
+# ── 3. auto-restore on login ──────────────────────────────────────────────────
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  # macOS: LaunchAgent
+  PLIST_PATH="${HOME}/Library/LaunchAgents/com.user.claude-tmux-restore.plist"
+  mkdir -p "${HOME}/Library/LaunchAgents"
+  cat > "${PLIST_PATH}" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -60,17 +92,22 @@ cat > "${PLIST_PATH}" <<EOF
 </dict>
 </plist>
 EOF
-echo "  ✓ LaunchAgent plist → ${PLIST_PATH}"
+  launchctl load "${PLIST_PATH}" 2>/dev/null || true
+  echo "  ✓ LaunchAgent registered (auto-restore on login)"
 
-# 4. Load plist
-launchctl load "${PLIST_PATH}" 2>/dev/null || true
-echo "  ✓ LaunchAgent loaded"
+else
+  # Linux: suggest adding to shell rc
+  echo "  ℹ  Linux detected — add this to ~/.bashrc or ~/.zshrc for auto-restore on login:"
+  echo "       claude-tmux restore &"
+fi
 
-# 5. Ensure ~/.local/bin is on PATH
+# ── 4. PATH check ─────────────────────────────────────────────────────────────
+
 if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
   echo ""
-  echo "  ⚠ Add this to your shell config (~/.zshrc or ~/.bashrc):"
-  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "  ⚠  ~/.local/bin is not in your PATH. Add this to ~/.bashrc or ~/.zshrc:"
+  echo "       export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "     Then restart your shell or run: source ~/.bashrc"
 fi
 
 echo ""
