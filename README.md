@@ -142,6 +142,22 @@ Recreates all `active` sessions and resumes their Claude conversations from wher
 
 ---
 
+## Claude Code skills (slash commands)
+
+After installing, you get four slash commands you can use inside any Claude Code session:
+
+| Command | What it does |
+|---|---|
+| `/tmux-new my-project` | Create a new tmux session |
+| `/tmux-new my-project --dangerously-skip-permissions` | Create with flags |
+| `/tmux-ls` | List all sessions |
+| `/tmux-kill my-project` | Kill a session |
+| `/tmux-attach my-project` | Reattach to a session |
+
+These are installed as [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code/skills) at `~/.claude/skills/tmux-*/`.
+
+---
+
 ## Remote access from another device
 
 Claude Code has **built-in remote control**. Enable it once and you can connect to any session from your phone, tablet, or another machine without needing SSH.
