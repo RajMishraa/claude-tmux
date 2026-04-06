@@ -569,6 +569,39 @@ assert_contains "reports not running"  "not running"  "$out"
 assert_contains "suggests restore cmd" "restore"      "$out"
 teardown
 
+# ─── 31. skill files exist and have correct frontmatter ──────────────────────
+echo "── 31. skill files"
+for skill in tmux-new tmux-ls tmux-kill tmux-attach; do
+  skill_file="${REPO_DIR}/skills/${skill}/SKILL.md"
+  assert_file_exists "skill ${skill} exists" "$skill_file"
+  content=$(cat "$skill_file")
+  assert_contains "${skill}: has name frontmatter"        "name: ${skill}"  "$content"
+  assert_contains "${skill}: has description frontmatter" "description:"    "$content"
+  assert_contains "${skill}: has allowed-tools"           "allowed-tools:"  "$content"
+  assert_contains "${skill}: allows claude-tmux"          "claude-tmux"     "$content"
+done
+
+# tmux-new and tmux-kill should accept arguments
+for skill in tmux-new tmux-kill tmux-attach; do
+  content=$(cat "${REPO_DIR}/skills/${skill}/SKILL.md")
+  assert_contains "${skill}: has argument-hint"  "argument-hint:" "$content"
+  assert_contains "${skill}: uses \$ARGUMENTS"   "\$ARGUMENTS"   "$content"
+done
+
+# tmux-ls should NOT require arguments
+content=$(cat "${REPO_DIR}/skills/tmux-ls/SKILL.md")
+assert_not_contains "tmux-ls: no argument-hint" "argument-hint:" "$content"
+
+# ─── 32. installer copies skills to ~/.claude/skills/ ────────────────────────
+echo "── 32. installer copies skills"
+setup
+# Run installer from the repo dir (local clone path)
+bash "${REPO_DIR}/install.sh" > /dev/null 2>&1
+for skill in tmux-new tmux-ls tmux-kill tmux-attach; do
+  assert_file_exists "installer copied ${skill}" "${TEST_HOME}/.claude/skills/${skill}/SKILL.md"
+done
+teardown
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════"

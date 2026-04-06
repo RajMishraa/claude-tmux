@@ -3,6 +3,19 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0] - 2026-04-06
+
+### Added
+- **Claude Code skills (slash commands):** `/tmux-new`, `/tmux-ls`, `/tmux-kill`, `/tmux-attach`.
+  Installed to `~/.claude/skills/` so they work inside any Claude Code session.
+- Installer copies skills from repo (local clone) or downloads from GitHub (curl | bash).
+- 113-test suite (+31 tests for skill files and installer copy).
+
+### Fixed
+- **`install.sh` now works with `curl | bash`** on Linux/Ubuntu. `BASH_SOURCE[0]` unbound
+  error fixed. Remote install downloads the binary and skills from GitHub.
+- **Linux support** in installer. Skips macOS LaunchAgent; suggests shell rc alternative.
+
 ## [0.4.0] - 2026-04-02
 
 ### Changed
