@@ -3,6 +3,14 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.1] - 2026-04-08
+
+### Fixed
+- **`claude-tmux upgrade` now installs new skills** — previously, upgrading from an old binary
+  would only download the skills that binary already knew about, missing any skills added in
+  newer versions. The upgrade command now fetches `ALL_SKILLS` from the remote `install.sh`
+  at upgrade time, so all skills are always installed correctly.
+
 ## [0.8.0] - 2026-04-08
 
 ### Added
