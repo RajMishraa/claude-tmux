@@ -1,0 +1,91 @@
+---
+name: tmux-team-sync
+description: Cross-pollinate context between Claude agents in a team. Each agent learns what the others have discovered or changed, so the team stays coherent without manual coordination.
+disable-model-invocation: true
+argument-hint: "[--tag <tag>]"
+allowed-tools: Bash(claude-tmux *), Bash(tmux *)
+---
+
+# Sync context across a team of agents
+
+**Arguments:** $ARGUMENTS
+
+This skill lets agents share discoveries with each other — API changes, shared files modified, decisions made — so each agent can adjust its own work accordingly.
+
+## Steps
+
+### 1. Identify the team
+
+- If `--tag <tag>` was given, use it
+- Otherwise ask which tag, or list: `claude-tmux ls`
+
+### 2. Collect context from each live session
+
+For each `[live]` session in the group:
+```bash
+tmux capture-pane -t <session-name> -p -S -100
+```
+
+Capture the last 100 lines. Look for:
+- Files created or modified (paths mentioned)
+- Functions or APIs changed
+- Decisions or workarounds discovered
+- Errors resolved and how
+- Anything that other agents might need to know
+
+### 3. Build a cross-agent briefing
+
+Analyze all captured output and produce a briefing document. For each relevant finding, note:
+- Which session it came from
+- What changed or was discovered
+- Which other sessions are likely affected
+
+Example briefing:
+```
+Cross-agent briefing — tag: sprint-7
+Generated: 2026-04-08
+
+From proj-42-fix-auth:
+  • Moved auth token storage from localStorage to httpOnly cookie
+  • Breaking change: /api/auth/refresh endpoint now requires X-CSRF-Token header
+  → Affects: proj-43-add-oauth (uses auth endpoints)
+
+From proj-43-add-oauth:
+  • Added new env var: OAUTH_REDIRECT_URI (must match provider config)
+  → Affects: proj-44-api-docs (document new env var)
+
+No changes from proj-44-api-docs yet.
+```
+
+### 4. Send briefing to each affected session
+
+For each session that has relevant updates to receive, use `tmux send-keys` to paste a context note:
+
+```bash
+tmux send-keys -t <session-name> "
+# Context sync from team (sprint-7):
+# proj-42-fix-auth changed auth token storage — /api/auth/refresh now requires X-CSRF-Token header
+# Update your OAuth implementation to include this header
+" Enter
+```
+
+> This sends the note as text input to the Claude session. Claude will see it and incorporate it.
+
+### 5. Confirm what was sent
+
+Report:
+```
+Sync complete — sprint-7:
+  proj-43-add-oauth  ← notified about auth header change
+  proj-44-api-docs   ← notified about new OAUTH_REDIRECT_URI env var
+  proj-42-fix-auth   — no incoming updates
+```
+
+---
+
+## Notes
+
+- This skill reads pane output only — it can't see files the agents modified unless they printed the path
+- For deeper context sharing, agents should write summaries to a shared file (e.g. `.claude-team/sprint-7-notes.md`) that all sessions can read
+- Run this periodically (e.g. every hour or at natural breakpoints) to keep agents aligned
+- Sending too-long messages via `tmux send-keys` can confuse the session — keep sync notes concise (under 20 lines)

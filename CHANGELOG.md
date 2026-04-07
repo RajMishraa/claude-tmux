@@ -3,6 +3,26 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.0] - 2026-04-08
+
+### Added
+- **Multi-agent teamwork skills** — 6 new Claude Code slash commands for coordinating teams of agents:
+  - **`/tmux-team-create`** — Spin up a team of Claude agents from JIRA tickets or task descriptions.
+    Each session gets its own ticket context and a shared tag for grouping.
+  - **`/tmux-team-status`** — Snapshot progress of all agents in a group. Captures each session's
+    recent pane output and synthesizes a concise status per agent.
+  - **`/tmux-team-sync`** — Cross-pollinate context between agents. Reads all sessions in a group,
+    identifies cross-cutting changes (API modifications, new env vars, decisions), and sends a
+    targeted briefing to each affected session via `tmux send-keys`.
+  - **`/tmux-plan`** — Read a JIRA Epic (or describe a goal in plain text) and generate a Work
+    Breakdown Structure. Optionally creates JIRA subtasks and spins up agent sessions for each.
+  - **`/tmux-handoff`** — Write a structured handoff document (state, decisions, next steps) and
+    deliver it to another agent session. Saves to `.claude-handoffs/` for async delivery.
+  - **`/tmux-review`** — Review another agent's work. Reads git diff and pane output against the
+    JIRA acceptance criteria and produces a structured verdict (Approved / Changes Requested).
+- `claude-tmux help` now lists all multi-agent skills.
+- 201-test suite (+48 tests for all 6 new skills, version, and install coverage).
+
 ## [0.7.1] - 2026-04-08
 
 ### Added

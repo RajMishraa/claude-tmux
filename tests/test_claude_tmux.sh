@@ -865,7 +865,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.7.0" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.0" > "$outfile"
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
   echo "stub skill" > "$outfile"
 fi
@@ -1116,6 +1116,101 @@ setup
 out=$("$CLAUDE_TMUX" help)
 assert_contains "help shows jira command" "jira -s" "$out"
 teardown
+
+# ─── 71. /tmux-team-create skill ──────────────────────────────────────────────
+echo "── 71. tmux-team-create skill"
+skill_file="${REPO_DIR}/skills/tmux-team-create/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-team-create"     "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "has allowed-tools"         "allowed-tools:"             "$content"
+assert_contains "mentions claude-tmux new"  "claude-tmux new"            "$content"
+assert_contains "mentions --tag"            "--tag"                      "$content"
+assert_contains "mentions --jira"           "--jira"                     "$content"
+
+# ─── 72. /tmux-team-status skill ──────────────────────────────────────────────
+echo "── 72. tmux-team-status skill"
+skill_file="${REPO_DIR}/skills/tmux-team-status/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-team-status"     "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "mentions claude-tmux ls"   "claude-tmux ls"             "$content"
+assert_contains "mentions tmux capture"     "tmux capture-pane"          "$content"
+
+# ─── 73. /tmux-team-sync skill ────────────────────────────────────────────────
+echo "── 73. tmux-team-sync skill"
+skill_file="${REPO_DIR}/skills/tmux-team-sync/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-team-sync"       "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "mentions tmux capture"     "tmux capture-pane"          "$content"
+assert_contains "mentions tmux send-keys"   "tmux send-keys"             "$content"
+
+# ─── 74. /tmux-plan skill ─────────────────────────────────────────────────────
+echo "── 74. tmux-plan skill"
+skill_file="${REPO_DIR}/skills/tmux-plan/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-plan"            "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "has atlassian tools"       "atlassian"                  "$content"
+assert_contains "mentions WBS"              "WBS"                        "$content"
+assert_contains "mentions claude-tmux new"  "claude-tmux new"            "$content"
+
+# ─── 75. /tmux-handoff skill ──────────────────────────────────────────────────
+echo "── 75. tmux-handoff skill"
+skill_file="${REPO_DIR}/skills/tmux-handoff/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-handoff"         "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "mentions claude-tmux ls"   "claude-tmux ls"             "$content"
+assert_contains "mentions tmux send-keys"   "tmux send-keys"             "$content"
+assert_contains "mentions handoff doc"      "handoff"                    "$content"
+
+# ─── 76. /tmux-review skill ───────────────────────────────────────────────────
+echo "── 76. tmux-review skill"
+skill_file="${REPO_DIR}/skills/tmux-review/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-review"          "$content"
+assert_contains "has argument-hint"         "argument-hint:"             "$content"
+assert_contains "mentions git diff"         "git diff"                   "$content"
+assert_contains "mentions tmux capture"     "tmux capture-pane"          "$content"
+assert_contains "mentions review verdict"   "VERDICT"                    "$content"
+
+# ─── 77. help lists multi-agent skills ────────────────────────────────────────
+echo "── 77. help lists multi-agent skills"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help mentions tmux-team-create"  "tmux-team-create"   "$out"
+assert_contains "help mentions tmux-team-status"  "tmux-team-status"   "$out"
+assert_contains "help mentions tmux-team-sync"    "tmux-team-sync"     "$out"
+assert_contains "help mentions tmux-plan"         "tmux-plan"          "$out"
+assert_contains "help mentions tmux-handoff"      "tmux-handoff"       "$out"
+assert_contains "help mentions tmux-review"       "tmux-review"        "$out"
+teardown
+
+# ─── 78. version is 0.8.0 ─────────────────────────────────────────────────────
+echo "── 78. version is 0.8.0"
+setup
+out=$("$CLAUDE_TMUX" version)
+assert_contains "version is 0.8.0" "0.8.0" "$out"
+teardown
+
+# ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
+echo "── 79. install.sh includes new skills"
+installer="${REPO_DIR}/install.sh"
+content=$(cat "$installer")
+assert_contains "install has tmux-team-create"  "tmux-team-create"   "$content"
+assert_contains "install has tmux-team-status"  "tmux-team-status"   "$content"
+assert_contains "install has tmux-team-sync"    "tmux-team-sync"     "$content"
+assert_contains "install has tmux-plan"         "tmux-plan"          "$content"
+assert_contains "install has tmux-handoff"      "tmux-handoff"       "$content"
+assert_contains "install has tmux-review"       "tmux-review"        "$content"
 
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""

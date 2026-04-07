@@ -174,6 +174,55 @@ Recreates all `active` sessions and resumes their Claude conversations from wher
 
 ---
 
+## Multi-agent teamwork
+
+Spin up a team of Claude agents, each working on their own task or JIRA ticket, all coordinated from a single session.
+
+### Workflow example
+
+```bash
+# Plan the work — reads a JIRA Epic and generates a Work Breakdown Structure
+/tmux-plan PROJ-EPIC-50
+
+# Create a team from multiple tickets at once
+/tmux-team-create --tag sprint-7 --jira PROJ-100,PROJ-101,PROJ-102
+
+# Each command above creates separate sessions:
+#   proj-100-fix-auth    [live]  tag: sprint-7
+#   proj-101-add-oauth   [live]  tag: sprint-7
+#   proj-102-api-docs    [live]  tag: sprint-7
+
+# Check what each agent is doing
+/tmux-team-status --tag sprint-7
+
+# Share discoveries between agents (API changes, decisions, etc.)
+/tmux-team-sync --tag sprint-7
+
+# When an agent finishes, hand off to another
+/tmux-handoff proj-102-api-docs
+
+# Review another agent's work before marking a ticket done
+/tmux-review proj-101-add-oauth
+```
+
+### All multi-agent skills
+
+| Skill | What it does |
+|---|---|
+| `/tmux-plan` | Read a JIRA Epic → generate WBS → optionally create subtask sessions |
+| `/tmux-team-create` | Spin up multiple sessions from JIRA tickets or task descriptions |
+| `/tmux-team-status` | Show progress of all agents in a group |
+| `/tmux-team-sync` | Cross-pollinate context between agents |
+| `/tmux-handoff` | Write a structured handoff doc and deliver it to another session |
+| `/tmux-review` | Review another agent's work against JIRA acceptance criteria |
+| `/tmux-update-jira` | Post a progress update to this session's JIRA ticket |
+| `/tmux-pick-ticket` | Search and pick an open JIRA ticket to start working on |
+| `/tmux-link-jira` | Link this session to a JIRA ticket (from inside Claude) |
+
+> **JIRA is optional.** Everything works with just tags and task descriptions — JIRA is an enhancement, not a requirement.
+
+---
+
 ## JIRA integration
 
 Link sessions to JIRA tickets. Claude auto-fetches the ticket description on startup and can post progress updates.
