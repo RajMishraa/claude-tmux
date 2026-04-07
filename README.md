@@ -65,7 +65,7 @@ cd claude-tmux
 ### `new` — start a session
 
 ```bash
-claude-tmux new -s <name> [--tag <tag>] [--jira <TICKET>] [-d] [claude flags...]
+claude-tmux new -s <name> [--tag <tag>] [--jira <TICKET>] [-m <msg>] [-d] [claude flags...]
 ```
 
 Creates a tmux session and starts Claude inside it. Any unrecognized flags are forwarded directly to Claude.
@@ -80,9 +80,14 @@ claude-tmux new -s uan-project --dangerously-skip-permissions
 # Choose a model
 claude-tmux new -s uan-project --model opus
 
+# Start with an initial task (stays interactive — do NOT use -p/--print)
+claude-tmux new -s research --message "Research X and write a report to /tmp/report.md"
+
 # Create without attaching (for scripting / team creation)
 claude-tmux new -s uan-project --detach
 ```
+
+> **`-p/--print` is blocked.** Passing `-p` to `claude` starts it in non-interactive mode — it runs once and exits, leaving a dead tmux session. Use `--message/-m` instead to send an initial prompt to an interactive session.
 
 Group sessions by tag:
 

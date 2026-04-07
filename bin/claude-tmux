@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.8.4"
+VERSION="0.8.5"
 GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
@@ -255,8 +255,10 @@ claude-tmux v${VERSION} — tmux session manager for Claude Code
 https://github.com/RajMishraa/claude-tmux
 
 Usage:
-  claude-tmux new -s <name> [--tag <t1,t2>] [--jira <PROJ-123>] [-d] [<claude-args...>]
-                                                 Create & attach new session (-d: detach, no attach)
+  claude-tmux new -s <name> [--tag <t1,t2>] [--jira <PROJ-123>] [-m <msg>] [-d] [<claude-args...>]
+                                                 Create & attach new session
+                                                 -m/--message: send initial prompt to interactive session
+                                                 -d/--detach: create without attaching
   claude-tmux attach -s <name>                   Attach to existing session
   claude-tmux ls [--tag <group>]                 List all sessions (optionally filter by tag)
   claude-tmux jira -s <name> [TICKET-ID]          Get/set JIRA ticket for a session
@@ -291,18 +293,19 @@ EOF
 # ── subcommands ───────────────────────────────────────────────────────────────
 
 cmd_new() {
-  local name="" jira="" detach=0 extra_args=()
+  local name="" jira="" detach=0 initial_message="" extra_args=()
   local -a tags=()
 
-  # -s/--session, --tag, --jira, and --detach are consumed by claude-tmux.
+  # -s/--session, --tag, --jira, --detach, and --message are consumed by claude-tmux.
   # All other args are passed directly to claude.
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -s|--session) name="$2"; shift 2 ;;
-      --tag)        tags+=("$2"); shift 2 ;;
-      --jira)       jira="$2"; shift 2 ;;
-      -d|--detach)  detach=1; shift ;;
-      *)            extra_args+=("$1"); shift ;;
+      -s|--session)   name="$2"; shift 2 ;;
+      --tag)          tags+=("$2"); shift 2 ;;
+      --jira)         jira="$2"; shift 2 ;;
+      -d|--detach)    detach=1; shift ;;
+      -m|--message)   initial_message="$2"; shift 2 ;;
+      *)              extra_args+=("$1"); shift ;;
     esac
   done
 
@@ -314,6 +317,18 @@ cmd_new() {
 
   [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
   _validate_name "$name"
+
+  # Guard against -p/--print being forwarded — it starts Claude non-interactively
+  # and is fundamentally incompatible with a persistent tmux session.
+  for arg in "${extra_args[@]+"${extra_args[@]}"}"; do
+    if [[ "$arg" == "-p" || "$arg" == "--print" ]]; then
+      echo "Error: -p/--print starts Claude in non-interactive mode and cannot be used with claude-tmux." >&2
+      echo "  To send an initial prompt to an interactive session, use:" >&2
+      echo "    claude-tmux new -s $name --message \"<your prompt>\"" >&2
+      exit 1
+    fi
+  done
+
   _ensure_registry
 
   if _tmux_session_exists "$name"; then
@@ -345,7 +360,14 @@ cmd_new() {
   echo "  Working dir : $cwd"
   [[ -n "$tag" ]] && echo "  Tags        : $tag"
   [[ -n "$jira" ]] && echo "  JIRA        : $jira"
+  [[ -n "$initial_message" ]] && echo "  Message     : $initial_message"
   echo "  Resume cmd  : claude-tmux attach -s $name"
+
+  # Send initial message after Claude's interactive prompt appears
+  if [[ -n "$initial_message" ]]; then
+    sleep 3
+    tmux send-keys -t "$name" "$initial_message" Enter
+  fi
 
   if [[ $detach -eq 1 ]]; then
     echo ""

@@ -3,6 +3,18 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.5] - 2026-04-08
+
+### Added
+- **`claude-tmux new --message/-m "<prompt>"`** — Send an initial prompt to an interactive session.
+  Uses `tmux send-keys` after Claude's prompt appears, keeping the session fully interactive.
+  Replaces the broken pattern of passing `-p "<prompt>"` as a claude-arg.
+
+### Fixed
+- **`-p/--print` is now blocked** — Passing `-p` or `--print` as a claude-arg silently made Claude
+  run non-interactively (print mode), execute once, and exit — corrupting the tmux session.
+  `claude-tmux new` now exits with an error and suggests `--message` instead.
+
 ## [0.8.4] - 2026-04-08
 
 ### Fixed

@@ -863,6 +863,43 @@ setup
 out=$("$CLAUDE_TMUX" help)
 assert_contains "help shows -d flag"  "-d"       "$out"
 assert_contains "help shows detach"   "detach"   "$out"
+assert_contains "help shows -m flag"  "-m"       "$out"
+assert_contains "help shows message"  "message"  "$out"
+teardown
+
+# ─── 51d. -p/--print is rejected ──────────────────────────────────────────────
+echo "── 51d. -p/--print rejected"
+setup
+_source_script
+_ensure_registry
+out=$("$CLAUDE_TMUX" new -s testprint -p "hello" 2>&1 || true)
+assert_contains "-p rejected"            "Error"           "$out"
+assert_contains "-p suggests --message"  "--message"       "$out"
+teardown
+
+echo "── 51e. --print rejected"
+setup
+_source_script
+_ensure_registry
+out=$("$CLAUDE_TMUX" new -s testprint --print "hello" 2>&1 || true)
+assert_contains "--print rejected"  "Error"  "$out"
+teardown
+
+# ─── 51f. -m/--message parsed ────────────────────────────────────────────────
+echo "── 51f. --message parsed"
+setup
+_source_script
+_test_args=(-s "proj" --message "do the thing")
+_test_name="" _test_msg=""
+while [[ ${#_test_args[@]} -gt 0 ]]; do
+  case "${_test_args[0]}" in
+    -s|--session) _test_name="${_test_args[1]}"; _test_args=("${_test_args[@]:2}") ;;
+    -m|--message) _test_msg="${_test_args[1]}";  _test_args=("${_test_args[@]:2}") ;;
+    *)            _test_args=("${_test_args[@]:1}") ;;
+  esac
+done
+assert_eq "name parsed"    "proj"         "$_test_name"
+assert_eq "message parsed" "do the thing" "$_test_msg"
 teardown
 
 # ─── 51c. help shows upgrade ──────────────────────────────────────────────────
@@ -891,7 +928,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.4" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.5" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1231,7 +1268,7 @@ teardown
 echo "── 78. version is 0.8.3"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.4" "0.8.4" "$out"
+assert_contains "version is 0.8.5" "0.8.5" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
