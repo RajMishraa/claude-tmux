@@ -120,6 +120,18 @@ old-spike              [killed]   2026-03-28 10:00:00    /work/spike
 
 ---
 
+### `url` — view the remote session URL
+
+```bash
+claude-tmux url -s <name>
+```
+
+When remote access is enabled in Claude Code (`/config` → Remote Access → Always), the session URL is auto-captured on creation. Use this command to retrieve it later — for example, to open the session on your phone or another machine.
+
+If the URL wasn't captured at startup, running this command re-scans the tmux pane.
+
+---
+
 ### `kill` — stop a session
 
 ```bash

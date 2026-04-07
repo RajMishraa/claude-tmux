@@ -3,6 +3,17 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.1] - 2026-04-07
+
+### Added
+- **Auto-capture session URL** — When remote access is enabled in Claude Code, the session URL
+  is automatically captured from the tmux pane output after session creation and stored in the
+  registry. Access it any time with `claude-tmux url -s <name>`.
+- `claude-tmux url -s <name>` — Prints the stored remote URL. Also re-scans the tmux pane if
+  the session is still live (useful if the URL wasn't captured on first try).
+- `claude-tmux ls` — Now shows a URL column instead of session ID when any session has a stored URL.
+- 93-test suite (+11 tests for URL storage, capture, display, and edge cases).
+
 ## [0.4.0] - 2026-04-02
 
 ### Changed

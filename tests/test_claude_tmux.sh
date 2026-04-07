@@ -569,6 +569,129 @@ assert_contains "reports not running"  "not running"  "$out"
 assert_contains "suggests restore cmd" "restore"      "$out"
 teardown
 
+# ─── 31. _set_session_url stores URL ──────────────────────────────────────────
+echo "── 31. set session URL"
+setup
+_source_script
+_ensure_registry
+_register_session "url-proj" "/work" "uuid-u"
+_set_session_url "url-proj" "https://claude.ai/code/abc123"
+assert_json_field "url stored" \
+  "${TEST_HOME}/.claude-tmux/sessions.json" "url-proj" "url" "https://claude.ai/code/abc123"
+teardown
+
+# ─── 32. _get_session_url reads URL ──────────────────────────────────────────
+echo "── 32. get session URL"
+setup
+_source_script
+_ensure_registry
+_register_session "url-proj" "/work" "uuid-u"
+_set_session_url "url-proj" "https://claude.ai/code/xyz789"
+url=$(_get_session_url "url-proj")
+assert_eq "url read back correctly" "https://claude.ai/code/xyz789" "$url"
+teardown
+
+# ─── 33. _get_session_url fails when no URL ──────────────────────────────────
+echo "── 33. get URL when none set"
+setup
+_source_script
+_ensure_registry
+_register_session "no-url-proj" "/work" "uuid-nu"
+url=$(_get_session_url "no-url-proj" 2>/dev/null)
+assert_eq "no url returns empty string" "" "$url"
+teardown
+
+# ─── 34. cmd_url prints stored URL ──────────────────────────────────────────
+echo "── 34. cmd_url shows URL"
+setup
+_source_script
+_ensure_registry
+_register_session "show-url" "/work" "uuid-su"
+_set_session_url "show-url" "https://claude.ai/code/test456"
+out=$("$CLAUDE_TMUX" url -s show-url 2>&1)
+assert_contains "cmd_url prints URL" "https://claude.ai/code/test456" "$out"
+teardown
+
+# ─── 35. cmd_url fails when no URL stored ────────────────────────────────────
+echo "── 35. cmd_url with no URL"
+setup
+_source_script
+_ensure_registry
+_register_session "empty-url" "/work" "uuid-eu"
+out=$("$CLAUDE_TMUX" url -s empty-url 2>&1 || true)
+assert_contains "reports no URL" "No URL stored" "$out"
+teardown
+
+# ─── 36. ls shows URL column when URLs exist ─────────────────────────────────
+echo "── 36. ls with URLs"
+setup
+_source_script
+_ensure_registry
+_register_session "proj-a" "/work" "uuid-a"
+_register_session "proj-b" "/work" "uuid-b"
+_set_session_url "proj-a" "https://claude.ai/code/aaa"
+out=$("$CLAUDE_TMUX" ls)
+assert_contains "ls shows URL column header" "URL" "$out"
+assert_contains "ls shows stored URL" "https://claude.ai/code/aaa" "$out"
+assert_contains "ls shows proj-b" "proj-b" "$out"
+teardown
+
+# ─── 37. ls shows session ID when no URLs exist ──────────────────────────────
+echo "── 37. ls without URLs (legacy view)"
+setup
+_source_script
+_ensure_registry
+_register_session "proj-c" "/work" "uuid-c"
+out=$("$CLAUDE_TMUX" ls)
+assert_contains "ls shows SESSION ID header" "SESSION ID" "$out"
+assert_contains "ls shows uuid" "uuid-c" "$out"
+teardown
+
+# ─── 38. _capture_url extracts URL from tmux pane ────────────────────────────
+echo "── 38. capture URL from pane"
+setup
+_source_script
+# Stub tmux capture-pane to return fake pane content with a URL
+cat > "${TEST_HOME}/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  capture-pane)
+    echo "Claude Code v1.0"
+    echo "Remote session: https://claude.ai/code/session_abc123"
+    echo "Type /help for commands"
+    ;;
+  has-session) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TEST_HOME}/bin/tmux"
+url=$(_capture_url "test-session")
+assert_eq "captured URL from pane" "https://claude.ai/code/session_abc123" "$url"
+teardown
+
+# ─── 39. _capture_url returns empty when no URL in pane ──────────────────────
+echo "── 39. capture URL (none in pane)"
+setup
+_source_script
+cat > "${TEST_HOME}/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  capture-pane) echo "Claude Code v1.0"; echo "Type /help" ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "${TEST_HOME}/bin/tmux"
+url=$(_capture_url "test-session")
+assert_eq "empty when no URL in pane" "" "$url"
+teardown
+
+# ─── 40. help shows url subcommand ───────────────────────────────────────────
+echo "── 40. help shows url"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help shows url command" "url -s" "$out"
+teardown
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════"

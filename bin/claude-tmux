@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.4.0"
+VERSION="0.4.1"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
 SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
@@ -101,6 +101,13 @@ elif op == "status":
             s["status"] = status
             break
 
+elif op == "url":
+    name, url = args[1], args[2]
+    for s in data["sessions"]:
+        if s["name"] == name:
+            s["url"] = url
+            break
+
 with open(tmp, "w") as f:
     json.dump(data, f, indent=2)
 os.replace(tmp, path)
@@ -118,6 +125,33 @@ _register_session() {
 
 _update_session_status() {
   _json_write "$SESSIONS_FILE" status "$1" "$2"
+}
+
+_set_session_url() {
+  _json_write "$SESSIONS_FILE" url "$1" "$2"
+}
+
+# Capture URL from tmux pane output.
+_capture_url() {
+  local name="$1"
+  tmux capture-pane -t "$name" -p 2>/dev/null | grep -oE 'https://[^ ]+' | tail -1
+}
+
+# Read stored URL from registry.
+_get_session_url() {
+  python3 - "$SESSIONS_FILE" "$1" <<'PYEOF'
+import json, sys
+path, name = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+for s in data["sessions"]:
+    if s["name"] == name:
+        url = s.get("url", "")
+        if url:
+            print(url)
+        sys.exit(0)
+sys.exit(1)
+PYEOF
 }
 
 # Write a startup script for a new session (uses --session-id).
@@ -184,6 +218,7 @@ Usage:
   claude-tmux new -s <name> [<claude-args...>]   Create & attach new session
   claude-tmux attach -s <name>                   Attach to existing session
   claude-tmux ls                                 List all sessions
+  claude-tmux url -s <name>                      Show/refresh session URL
   claude-tmux restore                            Restore active sessions (runs at login)
   claude-tmux kill -s <name>                     Kill a session
   claude-tmux version                            Print version
@@ -192,6 +227,7 @@ Examples:
   claude-tmux new -s uan-project
   claude-tmux new -s uan-project --dangerously-skip-permissions
   claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
+  claude-tmux url -s uan-project
   claude-tmux attach -s uan-project
   claude-tmux ls
   claude-tmux kill -s uan-project
@@ -240,6 +276,18 @@ cmd_new() {
   echo "  Session ID  : $session_id"
   echo "  Working dir : $cwd"
   echo "  Resume cmd  : claude-tmux attach -s $name"
+
+  # Auto-capture remote URL (Claude prints it on startup if remote access is on)
+  echo "  Waiting for remote URL..."
+  sleep 5
+  local url
+  url=$(_capture_url "$name")
+  if [[ -n "$url" ]]; then
+    _set_session_url "$name" "$url"
+    echo "  URL         : $url"
+  else
+    echo "  URL         : (not detected — run 'claude-tmux url -s $name' later)"
+  fi
   echo ""
 
   tmux attach-session -t "$name"
@@ -273,6 +321,44 @@ cmd_attach() {
   fi
 }
 
+cmd_url() {
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session) name="$2"; shift 2 ;;
+      *) echo "Error: unknown option '$1'" >&2; exit 1 ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
+  _validate_name "$name"
+  _ensure_registry
+
+  # Try to refresh from tmux pane if session is live
+  if _tmux_session_exists "$name"; then
+    local captured
+    captured=$(_capture_url "$name")
+    if [[ -n "$captured" ]]; then
+      _set_session_url "$name" "$captured"
+    fi
+  fi
+
+  # Print stored URL
+  local url
+  url=$(_get_session_url "$name") || {
+    echo "No URL stored for session '$name'." >&2
+    echo "If remote access is on, run this inside the session first, then try again." >&2
+    exit 1
+  }
+  if [[ -n "$url" ]]; then
+    echo "$url"
+  else
+    echo "No URL stored for session '$name'." >&2
+    exit 1
+  fi
+}
+
 cmd_ls() {
   _ensure_registry
 
@@ -295,16 +381,29 @@ if not sessions:
     print("No sessions registered.")
     sys.exit(0)
 
-print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'SESSION ID':<36} CWD")
-print("-" * 110)
-for s in sessions:
-    name       = s["name"]
-    reg_status = s.get("status", "unknown")
-    state      = "[live]" if name in live else f"[{reg_status}]"
-    created    = s.get("created_at", "")[:19].replace("T", " ")
-    sid        = s.get("session_id", "n/a")
-    cwd        = s.get("cwd", "")
-    print(f"{name:<22} {state:<10} {created:<22} {sid:<36} {cwd}")
+has_urls = any(s.get("url") for s in sessions)
+
+if has_urls:
+    print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'URL'}")
+    print("-" * 100)
+    for s in sessions:
+        name       = s["name"]
+        reg_status = s.get("status", "unknown")
+        state      = "[live]" if name in live else f"[{reg_status}]"
+        created    = s.get("created_at", "")[:19].replace("T", " ")
+        url        = s.get("url", "")
+        print(f"{name:<22} {state:<10} {created:<22} {url}")
+else:
+    print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'SESSION ID':<36} CWD")
+    print("-" * 110)
+    for s in sessions:
+        name       = s["name"]
+        reg_status = s.get("status", "unknown")
+        state      = "[live]" if name in live else f"[{reg_status}]"
+        created    = s.get("created_at", "")[:19].replace("T", " ")
+        sid        = s.get("session_id", "n/a")
+        cwd        = s.get("cwd", "")
+        print(f"{name:<22} {state:<10} {created:<22} {sid:<36} {cwd}")
 PYEOF
 }
 
@@ -420,6 +519,7 @@ case "$subcmd" in
   new)                  cmd_new "$@" ;;
   attach)               cmd_attach "$@" ;;
   ls)                   cmd_ls ;;
+  url)                  cmd_url "$@" ;;
   restore)              cmd_restore ;;
   kill)                 cmd_kill "$@" ;;
   version|--version|-v) echo "claude-tmux v${VERSION}" ;;
