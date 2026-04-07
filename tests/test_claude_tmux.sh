@@ -839,6 +839,103 @@ _test_tag_csv=$(IFS=,; echo "${_test_tags[*]}")
 assert_eq "comma tags passed through" "jira,sprint-5" "$_test_tag_csv"
 teardown
 
+# ─── 51. help shows upgrade ───────────────────────────────────────────────────
+echo "── 51. help shows upgrade"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help shows upgrade" "upgrade" "$out"
+teardown
+
+# ─── 52. upgrade detects same version ─────────────────────────────────────────
+echo "── 52. upgrade (already up to date)"
+setup
+_source_script
+mkdir -p "${TEST_HOME}/.local/bin"
+cp "$CLAUDE_TMUX" "${TEST_HOME}/.local/bin/claude-tmux"
+chmod +x "${TEST_HOME}/.local/bin/claude-tmux"
+export PATH="${TEST_HOME}/.local/bin:${PATH}"
+# Stub curl that writes same-version binary to the -o target file
+cat > "${TEST_HOME}/bin/curl" <<'STUBEOF'
+#!/usr/bin/env bash
+# Find the -o output file
+outfile=""
+prev=""
+for arg in "$@"; do
+  [[ "$prev" == "-o" ]] && outfile="$arg"
+  prev="$arg"
+done
+if [[ "$*" == *"bin/claude-tmux"* ]]; then
+  printf 'VERSION="%s"\n' "0.6.0" > "$outfile"
+elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
+  echo "stub skill" > "$outfile"
+fi
+STUBEOF
+chmod +x "${TEST_HOME}/bin/curl"
+out=$(cmd_upgrade 2>&1)
+assert_contains "reports up to date" "Already up to date" "$out"
+teardown
+
+# ─── 53. upgrade detects new version ──────────────────────────────────────────
+echo "── 53. upgrade (new version available)"
+setup
+_source_script
+mkdir -p "${TEST_HOME}/.local/bin"
+cp "$CLAUDE_TMUX" "${TEST_HOME}/.local/bin/claude-tmux"
+chmod +x "${TEST_HOME}/.local/bin/claude-tmux"
+export PATH="${TEST_HOME}/.local/bin:${PATH}"
+cat > "${TEST_HOME}/bin/curl" <<'STUBEOF'
+#!/usr/bin/env bash
+outfile=""
+prev=""
+for arg in "$@"; do
+  [[ "$prev" == "-o" ]] && outfile="$arg"
+  prev="$arg"
+done
+if [[ "$*" == *"bin/claude-tmux"* && -n "$outfile" ]]; then
+  printf '#!/usr/bin/env bash\nVERSION="99.0.0"\necho "new binary"\n' > "$outfile"
+elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
+  printf '---\nname: stub-skill\n---\n' > "$outfile"
+fi
+STUBEOF
+chmod +x "${TEST_HOME}/bin/curl"
+out=$(cmd_upgrade 2>&1)
+assert_contains "reports upgrade"   "v99.0.0" "$out"
+assert_contains "reports binary ok" "Binary updated" "$out"
+new_content=$(cat "${TEST_HOME}/.local/bin/claude-tmux")
+assert_contains "binary replaced" "99.0.0" "$new_content"
+teardown
+
+# ─── 54. upgrade updates skills ───────────────────────────────────────────────
+echo "── 54. upgrade updates skills"
+setup
+_source_script
+mkdir -p "${TEST_HOME}/.local/bin"
+cp "$CLAUDE_TMUX" "${TEST_HOME}/.local/bin/claude-tmux"
+chmod +x "${TEST_HOME}/.local/bin/claude-tmux"
+export PATH="${TEST_HOME}/.local/bin:${PATH}"
+cat > "${TEST_HOME}/bin/curl" <<'STUBEOF'
+#!/usr/bin/env bash
+outfile=""
+prev=""
+for arg in "$@"; do
+  [[ "$prev" == "-o" ]] && outfile="$arg"
+  prev="$arg"
+done
+if [[ "$*" == *"bin/claude-tmux"* && -n "$outfile" ]]; then
+  printf '#!/usr/bin/env bash\nVERSION="99.0.0"\n' > "$outfile"
+elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
+  printf '---\nname: updated-skill\n---\n' > "$outfile"
+fi
+STUBEOF
+chmod +x "${TEST_HOME}/bin/curl"
+cmd_upgrade > /dev/null 2>&1
+skills_updated=0
+for s in tmux-new tmux-ls tmux-kill tmux-attach; do
+  [[ -f "${TEST_HOME}/.claude/skills/${s}/SKILL.md" ]] && skills_updated=$((skills_updated + 1))
+done
+assert_eq "all 4 skills updated" "4" "$skills_updated"
+teardown
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════"

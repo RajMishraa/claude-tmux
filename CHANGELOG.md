@@ -3,6 +3,14 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0] - 2026-04-07
+
+### Added
+- **`claude-tmux upgrade`** — Self-upgrade from GitHub. Downloads the latest binary and
+  skills from the main branch and replaces the installed copy. Reports old → new version.
+  Skips if already up to date.
+- 118-test suite (+6 tests for upgrade: same version, new version, skill update, help).
+
 ## [0.5.1] - 2026-04-07
 
 ### Changed

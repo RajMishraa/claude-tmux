@@ -206,6 +206,16 @@ echo '{"sessions":[]}' > ~/.claude-tmux/sessions.json
 
 ---
 
+## Upgrade
+
+```bash
+claude-tmux upgrade
+```
+
+Downloads the latest version from GitHub and replaces the installed binary and skills. Skips if already up to date.
+
+---
+
 ## Uninstall
 
 ```bash
