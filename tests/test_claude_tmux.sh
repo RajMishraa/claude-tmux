@@ -865,7 +865,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.1" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.2" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1201,11 +1201,11 @@ assert_contains "help mentions tmux-handoff"      "tmux-handoff"       "$out"
 assert_contains "help mentions tmux-review"       "tmux-review"        "$out"
 teardown
 
-# ─── 78. version is 0.8.1 ─────────────────────────────────────────────────────
-echo "── 78. version is 0.8.1"
+# ─── 78. version is 0.8.2 ─────────────────────────────────────────────────────
+echo "── 78. version is 0.8.2"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.1" "0.8.1" "$out"
+assert_contains "version is 0.8.2" "0.8.2" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
@@ -1218,6 +1218,39 @@ assert_contains "install has tmux-team-sync"    "tmux-team-sync"     "$content"
 assert_contains "install has tmux-plan"         "tmux-plan"          "$content"
 assert_contains "install has tmux-handoff"      "tmux-handoff"       "$content"
 assert_contains "install has tmux-review"       "tmux-review"        "$content"
+
+# ─── 80. tmux-new skill ───────────────────────────────────────────────────────
+echo "── 80. tmux-new skill"
+skill_file="${REPO_DIR}/skills/tmux-new/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"    "name: tmux-new"       "$content"
+assert_contains "has argument-hint"       "argument-hint:"       "$content"
+assert_contains "mentions claude-tmux new" "claude-tmux new"    "$content"
+
+# ─── 81. tmux-ls skill ────────────────────────────────────────────────────────
+echo "── 81. tmux-ls skill"
+skill_file="${REPO_DIR}/skills/tmux-ls/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"    "name: tmux-ls"        "$content"
+assert_contains "mentions claude-tmux ls" "claude-tmux ls"       "$content"
+
+# ─── 82. tmux-kill skill ──────────────────────────────────────────────────────
+echo "── 82. tmux-kill skill"
+skill_file="${REPO_DIR}/skills/tmux-kill/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"      "name: tmux-kill"      "$content"
+assert_contains "mentions claude-tmux kill" "claude-tmux kill"     "$content"
+
+# ─── 83. tmux-attach skill ────────────────────────────────────────────────────
+echo "── 83. tmux-attach skill"
+skill_file="${REPO_DIR}/skills/tmux-attach/SKILL.md"
+assert_file_exists "skill file exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name frontmatter"        "name: tmux-attach"    "$content"
+assert_contains "mentions claude-tmux attach" "claude-tmux attach"   "$content"
 
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""

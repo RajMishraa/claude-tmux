@@ -3,6 +3,14 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.2] - 2026-04-08
+
+### Added
+- **Missing CLI helper skills** — `tmux-new`, `tmux-ls`, `tmux-kill`, and `tmux-attach` skills
+  were referenced in `install.sh` but never existed in the repo. They now exist and install
+  correctly. Each skill guides Claude through the corresponding CLI command.
+- 214-test suite (+13 tests for the 4 new skills).
+
 ## [0.8.1] - 2026-04-08
 
 ### Fixed

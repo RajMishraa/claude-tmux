@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.8.1"
+VERSION="0.8.2"
 GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
