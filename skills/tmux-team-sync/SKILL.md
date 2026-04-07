@@ -57,27 +57,36 @@ From proj-43-add-oauth:
 No changes from proj-44-api-docs yet.
 ```
 
-### 4. Send briefing to each affected session
+### 4. Write the briefing to a shared file
 
-For each session that has relevant updates to receive, use `tmux send-keys` to paste a context note:
+Do NOT use `tmux send-keys` with multi-line content — newlines are sent as Enter presses and will submit mid-message in the receiving session. Instead:
 
 ```bash
-tmux send-keys -t <session-name> "
-# Context sync from team (sprint-7):
-# proj-42-fix-auth changed auth token storage — /api/auth/refresh now requires X-CSRF-Token header
-# Update your OAuth implementation to include this header
-" Enter
+# Create shared directory in the project working directory (or $HOME if unknown)
+mkdir -p .claude-team
+
+# Write the full briefing to a timestamped file
+cat > .claude-team/<tag>-sync-$(date +%Y%m%d-%H%M).md << 'EOF'
+<briefing content here>
+EOF
 ```
 
-> This sends the note as text input to the Claude session. Claude will see it and incorporate it.
+Then send a **single-line** ping to each affected session:
+
+```bash
+tmux send-keys -t <session-name> -l "Note: context sync available at .claude-team/<tag>-sync-<timestamp>.md — read it when ready"
+```
+
+> `-l` sends the string literally (no special character interpretation). Do NOT append `Enter` — let the agent decide when to submit.
 
 ### 5. Confirm what was sent
 
 Report:
 ```
 Sync complete — sprint-7:
-  proj-43-add-oauth  ← notified about auth header change
-  proj-44-api-docs   ← notified about new OAUTH_REDIRECT_URI env var
+  File: .claude-team/sprint-7-sync-20260408-1430.md
+  proj-43-add-oauth  ← pinged (auth header change)
+  proj-44-api-docs   ← pinged (new OAUTH_REDIRECT_URI env var)
   proj-42-fix-auth   — no incoming updates
 ```
 
@@ -85,7 +94,8 @@ Sync complete — sprint-7:
 
 ## Notes
 
-- This skill reads pane output only — it can't see files the agents modified unless they printed the path
-- For deeper context sharing, agents should write summaries to a shared file (e.g. `.claude-team/sprint-7-notes.md`) that all sessions can read
-- Run this periodically (e.g. every hour or at natural breakpoints) to keep agents aligned
-- Sending too-long messages via `tmux send-keys` can confuse the session — keep sync notes concise (under 20 lines)
+- Always write to a file first, never send multi-line content via `tmux send-keys` — each newline becomes a separate Enter
+- Use `-l` flag with `tmux send-keys` for literal strings (no special character interpretation)
+- The `.claude-team/` directory should be in the shared project working directory so all sessions can access the file
+- If sessions work in different directories, use `~/.claude-tmux/team/<tag>/` as the shared location
+- Run this at natural breakpoints (phase completions, end of day) rather than continuously

@@ -56,13 +56,12 @@ To:   <target-session>
 
 ### 3. Deliver to the target session (if live)
 
-If the target session is `[live]`:
+If the target session is `[live]`, send a single-line ping (never multi-line — newlines become Enter presses):
 ```bash
-# Send the handoff document path to the target session
-tmux send-keys -t <target-session> "
-# Handoff from <this-session>: read .claude-handoffs/<this-session>-to-<target-session>.md
-" Enter
+tmux send-keys -t <target-session> -l "Handoff from <this-session> ready: .claude-handoffs/<this-session>-to-<target-session>.md"
 ```
+
+> Use `-l` for literal sending. Do NOT append `Enter` — let the agent submit when ready.
 
 If the target session is not live yet:
 - Save the file — it will be waiting when the agent starts
