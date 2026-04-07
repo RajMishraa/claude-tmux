@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.5.0"
+VERSION="0.5.1"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
 SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
@@ -79,8 +79,8 @@ with open(path) as f:
 op = args[0]
 
 if op == "register":
-    # argv: name cwd ts session_id tag [extra_arg ...]
-    name, cwd, ts, session_id, tag = args[1], args[2], args[3], args[4], args[5]
+    # argv: name cwd ts session_id tags_csv [extra_arg ...]
+    name, cwd, ts, session_id, tags_csv = args[1], args[2], args[3], args[4], args[5]
     extra = args[6:]
     data["sessions"] = [s for s in data["sessions"] if s["name"] != name]
     entry = {
@@ -90,8 +90,8 @@ if op == "register":
         "created_at": ts,
         "status": "active",
     }
-    if tag:
-        entry["tag"] = tag
+    if tags_csv:
+        entry["tags"] = [t.strip() for t in tags_csv.split(",") if t.strip()]
     if extra:
         entry["args"] = extra
     data["sessions"].append(entry)
@@ -217,7 +217,7 @@ claude-tmux v${VERSION} — tmux session manager for Claude Code
 https://github.com/RajMishraa/claude-tmux
 
 Usage:
-  claude-tmux new -s <name> [--tag <group>] [<claude-args...>]
+  claude-tmux new -s <name> [--tag <t1,t2> ...] [<claude-args...>]
                                                  Create & attach new session
   claude-tmux attach -s <name>                   Attach to existing session
   claude-tmux ls [--tag <group>]                 List all sessions (optionally filter by tag)
@@ -228,8 +228,8 @@ Usage:
 
 Examples:
   claude-tmux new -s uan-project
-  claude-tmux new -s ticket-triage --tag jira
-  claude-tmux new -s api-refactor --tag dev --dangerously-skip-permissions
+  claude-tmux new -s ticket-triage --tag jira,sprint-5
+  claude-tmux new -s api-refactor --tag dev --tag backend
   claude-tmux ls --tag jira
   claude-tmux url -s uan-project
   claude-tmux ls
@@ -240,17 +240,25 @@ EOF
 # ── subcommands ───────────────────────────────────────────────────────────────
 
 cmd_new() {
-  local name="" tag="" extra_args=()
+  local name="" extra_args=()
+  local -a tags=()
 
   # -s/--session and --tag are consumed by claude-tmux.
+  # --tag can be repeated or comma-separated (or both).
   # All other args are passed directly to claude.
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -s|--session) name="$2"; shift 2 ;;
-      --tag)        tag="$2"; shift 2 ;;
+      --tag)        tags+=("$2"); shift 2 ;;
       *)            extra_args+=("$1"); shift ;;
     esac
   done
+
+  # Join all tags into a single comma-separated string
+  local tag=""
+  if [[ ${#tags[@]} -gt 0 ]]; then
+    tag=$(IFS=,; echo "${tags[*]}")
+  fi
 
   [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
   _validate_name "$name"
@@ -279,7 +287,7 @@ cmd_new() {
   echo "Started claude-tmux session: $name"
   echo "  Session ID  : $session_id"
   echo "  Working dir : $cwd"
-  [[ -n "$tag" ]] && echo "  Tag         : $tag"
+  [[ -n "$tag" ]] && echo "  Tags        : $tag"
   echo "  Resume cmd  : claude-tmux attach -s $name"
 
   # Auto-capture remote URL (Claude prints it on startup if remote access is on)
@@ -391,8 +399,15 @@ with open(path) as f:
     data = json.load(f)
 
 sessions = data.get("sessions", [])
+
+# Migrate legacy "tag" string to "tags" array
+for s in sessions:
+    if "tag" in s and "tags" not in s:
+        old = s.pop("tag")
+        s["tags"] = [old] if old else []
+
 if filter_tag:
-    sessions = [s for s in sessions if s.get("tag", "") == filter_tag]
+    sessions = [s for s in sessions if filter_tag in s.get("tags", [])]
 
 if not sessions:
     if filter_tag:
@@ -401,12 +416,12 @@ if not sessions:
         print("No sessions registered.")
     sys.exit(0)
 
-has_tags = any(s.get("tag") for s in sessions)
+has_tags = any(s.get("tags") for s in sessions)
 has_urls = any(s.get("url") for s in sessions)
 
 header_parts = [f"{'NAME':<22}", f"{'STATE':<10}"]
 if has_tags:
-    header_parts.append(f"{'TAG':<14}")
+    header_parts.append(f"{'TAGS':<20}")
 header_parts.append(f"{'CREATED':<22}")
 if has_urls:
     header_parts.append("URL")
@@ -419,11 +434,11 @@ for s in sessions:
     name       = s["name"]
     reg_status = s.get("status", "unknown")
     state      = "[live]" if name in live else f"[{reg_status}]"
-    tag        = s.get("tag", "")
+    tags       = ",".join(s.get("tags", []))
     created    = s.get("created_at", "")[:19].replace("T", " ")
     parts = [f"{name:<22}", f"{state:<10}"]
     if has_tags:
-        parts.append(f"{tag:<14}")
+        parts.append(f"{tags:<20}")
     parts.append(f"{created:<22}")
     if has_urls:
         parts.append(s.get("url", ""))

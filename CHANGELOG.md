@@ -3,6 +3,16 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.1] - 2026-04-07
+
+### Changed
+- **Multiple tags per session.** Use comma-separated or repeated `--tag`:
+  `claude-tmux new -s task --tag jira,sprint-5` or `--tag jira --tag sprint-5`.
+  Tags stored as a JSON array (`"tags": ["jira", "sprint-5"]`).
+- `ls --tag <name>` matches any session that contains that tag.
+- Legacy single `"tag"` field auto-migrated to `"tags"` array on read.
+- 112-test suite (+4 tests for multi-tag, comma-separated, repeated flags).
+
 ## [0.5.0] - 2026-04-07
 
 ### Added
@@ -10,7 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `claude-tmux new -s ticket-triage --tag jira`. Tags are stored in the registry and
   shown in `ls` output.
 - **`claude-tmux ls --tag <group>`** — Filter sessions by tag. Only shows matching sessions.
-- `ls` output now includes a TAG column when any session has a tag.
+- `ls` output now includes a TAGS column when any session has tags.
 - 108-test suite (+15 tests for tag storage, filtering, multi-tag, arg parsing).
 
 ## [0.4.1] - 2026-04-07
