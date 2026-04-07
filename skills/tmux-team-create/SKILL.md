@@ -55,17 +55,17 @@ Ask: "Create these sessions? (yes/no)"
 
 ### 3. Create sessions
 
-For each session, run:
+For each session, run with `--detach` to create all sessions quickly without switching away or waiting for URL capture:
 
 ```bash
 # With JIRA ticket
-claude-tmux new -s <session-name> --tag <tag> --jira <TICKET-ID>
+claude-tmux new -s <session-name> --tag <tag> --jira <TICKET-ID> --detach
 
 # Without JIRA
-claude-tmux new -s <session-name> --tag <tag>
+claude-tmux new -s <session-name> --tag <tag> --detach
 ```
 
-> Each session opens in its own tmux window. Claude will auto-fetch the ticket description on startup if `--jira` was set.
+> `--detach` skips the 5-second URL capture wait and the `tmux attach`. All sessions are created immediately. Claude will auto-fetch the ticket description on startup if `--jira` was set.
 
 ### 4. Confirm and guide
 

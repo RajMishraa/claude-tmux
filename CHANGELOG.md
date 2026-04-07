@@ -3,6 +3,19 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.3] - 2026-04-08
+
+### Added
+- **`claude-tmux new --detach` (`-d`)** — Create a session without attaching or waiting for URL
+  capture. Designed for `/tmux-team-create` which creates multiple sessions at once — without
+  `--detach`, each session creation blocked for 5 seconds and then switched the terminal away.
+
+### Fixed
+- **`tmux send-keys` multi-line bug in 3 skills** — `tmux-team-sync`, `tmux-handoff`, and
+  `tmux-review` were sending multi-line strings via `tmux send-keys`, causing each newline to
+  fire as an Enter in the receiving session. Skills now write briefings to `.claude-team/` files
+  and send a single-line ping with `tmux send-keys -l` (no Enter appended).
+
 ## [0.8.2] - 2026-04-08
 
 ### Added

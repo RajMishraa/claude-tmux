@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.8.2"
+VERSION="0.8.3"
 GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
@@ -255,8 +255,8 @@ claude-tmux v${VERSION} — tmux session manager for Claude Code
 https://github.com/RajMishraa/claude-tmux
 
 Usage:
-  claude-tmux new -s <name> [--tag <t1,t2>] [--jira <PROJ-123>] [<claude-args...>]
-                                                 Create & attach new session
+  claude-tmux new -s <name> [--tag <t1,t2>] [--jira <PROJ-123>] [-d] [<claude-args...>]
+                                                 Create & attach new session (-d: detach, no attach)
   claude-tmux attach -s <name>                   Attach to existing session
   claude-tmux ls [--tag <group>]                 List all sessions (optionally filter by tag)
   claude-tmux jira -s <name> [TICKET-ID]          Get/set JIRA ticket for a session
@@ -291,16 +291,17 @@ EOF
 # ── subcommands ───────────────────────────────────────────────────────────────
 
 cmd_new() {
-  local name="" jira="" extra_args=()
+  local name="" jira="" detach=0 extra_args=()
   local -a tags=()
 
-  # -s/--session, --tag, and --jira are consumed by claude-tmux.
+  # -s/--session, --tag, --jira, and --detach are consumed by claude-tmux.
   # All other args are passed directly to claude.
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -s|--session) name="$2"; shift 2 ;;
       --tag)        tags+=("$2"); shift 2 ;;
       --jira)       jira="$2"; shift 2 ;;
+      -d|--detach)  detach=1; shift ;;
       *)            extra_args+=("$1"); shift ;;
     esac
   done
@@ -316,6 +317,10 @@ cmd_new() {
   _ensure_registry
 
   if _tmux_session_exists "$name"; then
+    if [[ $detach -eq 1 ]]; then
+      echo "Session '$name' already running (detach mode — not attaching)."
+      return
+    fi
     echo "Session '$name' already running — attaching."
     tmux attach-session -t "$name"
     return
@@ -341,6 +346,11 @@ cmd_new() {
   [[ -n "$tag" ]] && echo "  Tags        : $tag"
   [[ -n "$jira" ]] && echo "  JIRA        : $jira"
   echo "  Resume cmd  : claude-tmux attach -s $name"
+
+  if [[ $detach -eq 1 ]]; then
+    echo ""
+    return
+  fi
 
   # Auto-capture remote URL (Claude prints it on startup if remote access is on)
   echo "  Waiting for remote URL..."

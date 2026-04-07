@@ -839,8 +839,34 @@ _test_tag_csv=$(IFS=,; echo "${_test_tags[*]}")
 assert_eq "comma tags passed through" "jira,sprint-5" "$_test_tag_csv"
 teardown
 
-# ─── 51. help shows upgrade ───────────────────────────────────────────────────
-echo "── 51. help shows upgrade"
+# ─── 51. cmd_new --detach flag parsed ────────────────────────────────────────
+echo "── 51. cmd_new --detach flag"
+setup
+_source_script
+_test_args=(-s "proj" --detach --tag "dev")
+_test_name="" _test_detach=0 _test_tags=()
+while [[ ${#_test_args[@]} -gt 0 ]]; do
+  case "${_test_args[0]}" in
+    -s|--session) _test_name="${_test_args[1]}"; _test_args=("${_test_args[@]:2}") ;;
+    -d|--detach)  _test_detach=1; _test_args=("${_test_args[@]:1}") ;;
+    --tag)        _test_tags+=("${_test_args[1]}"); _test_args=("${_test_args[@]:2}") ;;
+    *)            _test_args=("${_test_args[@]:1}") ;;
+  esac
+done
+assert_eq "name parsed"   "proj" "$_test_name"
+assert_eq "detach parsed" "1"    "$_test_detach"
+teardown
+
+# ─── 51b. help shows -d flag ──────────────────────────────────────────────────
+echo "── 51b. help shows -d flag"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help shows -d flag"  "-d"       "$out"
+assert_contains "help shows detach"   "detach"   "$out"
+teardown
+
+# ─── 51c. help shows upgrade ──────────────────────────────────────────────────
+echo "── 51c. help shows upgrade"
 setup
 out=$("$CLAUDE_TMUX" help)
 assert_contains "help shows upgrade" "upgrade" "$out"
@@ -865,7 +891,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.2" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.3" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1201,11 +1227,11 @@ assert_contains "help mentions tmux-handoff"      "tmux-handoff"       "$out"
 assert_contains "help mentions tmux-review"       "tmux-review"        "$out"
 teardown
 
-# ─── 78. version is 0.8.2 ─────────────────────────────────────────────────────
-echo "── 78. version is 0.8.2"
+# ─── 78. version is 0.8.3 ─────────────────────────────────────────────────────
+echo "── 78. version is 0.8.3"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.2" "0.8.2" "$out"
+assert_contains "version is 0.8.3" "0.8.3" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
