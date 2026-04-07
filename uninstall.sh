@@ -5,6 +5,9 @@ set -euo pipefail
 BIN_TARGET="${HOME}/.local/bin/claude-tmux"
 SESSIONS_FILE="${HOME}/.claude-tmux/sessions.json"
 PLIST_PATH="${HOME}/Library/LaunchAgents/com.user.claude-tmux-restore.plist"
+SKILLS_DIR="${HOME}/.claude/skills"
+
+ALL_SKILLS="tmux-new tmux-ls tmux-kill tmux-attach tmux-update-jira tmux-pick-ticket tmux-link-jira tmux-team-create tmux-team-status tmux-team-sync tmux-plan tmux-handoff tmux-review"
 
 echo "Uninstalling claude-tmux..."
 
@@ -37,6 +40,19 @@ fi
 if [[ -f "$BIN_TARGET" ]]; then
   rm -f "$BIN_TARGET"
   echo "  ✓ Removed binary"
+fi
+
+# Remove Claude skills
+removed_skills=0
+for skill_name in $ALL_SKILLS; do
+  skill_path="${SKILLS_DIR}/${skill_name}"
+  if [[ -d "$skill_path" ]]; then
+    rm -rf "$skill_path"
+    removed_skills=$((removed_skills + 1))
+  fi
+done
+if [[ $removed_skills -gt 0 ]]; then
+  echo "  ✓ Removed ${removed_skills} Claude skills from ${SKILLS_DIR}/"
 fi
 
 echo ""

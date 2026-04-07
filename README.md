@@ -312,8 +312,8 @@ Downloads the latest version from GitHub and replaces the installed binary and s
 ## Uninstall
 
 ```bash
-./uninstall.sh          # removes binary + LaunchAgent, keeps session history
-rm -rf ~/.claude-tmux   # also wipes session history
+./uninstall.sh          # removes binary, LaunchAgent, and Claude skills
+rm -rf ~/.claude-tmux   # also wipes session history and team files
 ```
 
 ---
