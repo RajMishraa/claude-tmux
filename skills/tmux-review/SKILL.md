@@ -103,12 +103,14 @@ If a JIRA ticket is linked, use Atlassian MCP to post the review as a comment.
 
 **Option B — ping the agent's session:**
 ```bash
-tmux send-keys -t <reviewed-session> -l "Code review complete: .claude-reviews/<date>-<session>-review.md"
+mkdir -p ~/.claude-tmux/reviews
+# Save review first, then ping:
+tmux send-keys -t <reviewed-session> -l "Code review ready: ~/.claude-tmux/reviews/<date>-<session>-review.md"
 ```
 > Use `-l` (literal). Do NOT append `Enter` or include newlines — let the agent submit when ready.
 
 **Option C — save to file:**
-Save to `.claude-reviews/<date>-<session>-review.md` for reference.
+Save to `~/.claude-tmux/reviews/<date>-<session>-review.md` — accessible to all sessions.
 
 Ask the user which option(s) they want.
 

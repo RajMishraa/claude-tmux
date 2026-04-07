@@ -27,7 +27,13 @@ If the target session doesn't exist yet, note it — the handoff document can be
 
 ### 2. Write the handoff document
 
-Create a file at `.claude-handoffs/<this-session>-to-<target-session>.md` with this structure:
+Use `~/.claude-tmux/handoffs/` — accessible to all sessions regardless of working directory:
+
+```bash
+mkdir -p ~/.claude-tmux/handoffs
+```
+
+Create a file at `~/.claude-tmux/handoffs/<this-session>-to-<target-session>.md` with this structure:
 
 ```markdown
 # Handoff: <this-session> → <target-session>
@@ -58,7 +64,7 @@ To:   <target-session>
 
 If the target session is `[live]`, send a single-line ping (never multi-line — newlines become Enter presses):
 ```bash
-tmux send-keys -t <target-session> -l "Handoff from <this-session> ready: .claude-handoffs/<this-session>-to-<target-session>.md"
+tmux send-keys -t <target-session> -l "Handoff ready: ~/.claude-tmux/handoffs/<this-session>-to-<target-session>.md"
 ```
 
 > Use `-l` for literal sending. Do NOT append `Enter` — let the agent submit when ready.
@@ -73,7 +79,7 @@ If the target session is not live yet:
 Handoff complete:
   From: proj-42-fix-auth
   To:   proj-45-auth-tests
-  File: .claude-handoffs/proj-42-fix-auth-to-proj-45-auth-tests.md
+  File: ~/.claude-tmux/handoffs/proj-42-fix-auth-to-proj-45-auth-tests.md
   Delivered: yes (session is live)
 ```
 
@@ -81,7 +87,6 @@ Handoff complete:
 
 ## Notes
 
-- The `.claude-handoffs/` directory should be in the project's working directory so both sessions share access
-- If sessions work in different directories, save the handoff to a shared location like `~/.claude-tmux/handoffs/`
-- The receiving agent should read the handoff file at startup — you can automate this with `--append-system-prompt` when creating the session
+- Always use `~/.claude-tmux/handoffs/` — it's accessible to all sessions regardless of working directory
+- The receiving agent should read the handoff file when it sees the ping
 - For JIRA-linked sessions, also run `/tmux-update-jira` before handing off to leave a comment on the ticket
