@@ -250,11 +250,11 @@ echo "── 7. register session (with extra args)"
 setup
 _source_script
 _ensure_registry
-_register_session "proj-skip" "/work" "uuid-def" "" "--dangerously-skip-permissions"
+_register_session "proj-skip" "/work" "uuid-def" "" "" "--dangerously-skip-permissions"
 assert_json_array "dangerously flag stored in args" \
   "${TEST_HOME}/.claude-tmux/sessions.json" "proj-skip" "args" "--dangerously-skip-permissions"
 
-_register_session "proj-model" "/work" "uuid-ghi" "" "--model" "opus"
+_register_session "proj-model" "/work" "uuid-ghi" "" "" "--model" "opus"
 assert_json_array "model flag stored" \
   "${TEST_HOME}/.claude-tmux/sessions.json" "proj-model" "args" "--model"
 assert_json_array "model value stored" \
@@ -402,7 +402,7 @@ _register_session "beta"  "/work/beta"  "uuid-b"
 out=$("$CLAUDE_TMUX" ls)
 assert_contains "ls shows alpha"      "alpha"  "$out"
 assert_contains "ls shows beta"       "beta"   "$out"
-assert_contains "ls shows session id" "uuid-a" "$out"
+assert_contains "ls shows cwd" "/work/alpha" "$out"
 teardown
 
 # ─── 20. ls — live vs stopped state ──────────────────────────────────────────
@@ -465,8 +465,8 @@ echo "── 23. multiple sessions in same directory"
 setup
 _source_script
 _ensure_registry
-_register_session "proj-a" "/shared/dir" "uuid-a" "" "--dangerously-skip-permissions"
-_register_session "proj-b" "/shared/dir" "uuid-b" "" "--model" "opus"
+_register_session "proj-a" "/shared/dir" "uuid-a" "" "" "--dangerously-skip-permissions"
+_register_session "proj-b" "/shared/dir" "uuid-b" "" "" "--model" "opus"
 _register_session "proj-c" "/shared/dir" "uuid-c"
 count=$(python3 -c "
 import json
@@ -487,7 +487,7 @@ echo "── 24. restore single — replays stored args"
 setup
 _source_script
 _ensure_registry
-_register_session "restore-proj" "/work" "uuid-r" "" "--dangerously-skip-permissions" "--model" "sonnet"
+_register_session "restore-proj" "/work" "uuid-r" "" "" "--dangerously-skip-permissions" "--model" "sonnet"
 _restore_single "restore-proj"
 script="${TEST_HOME}/.claude-tmux/scripts/restore-proj.sh"
 assert_file_exists "restore script created" "$script"
@@ -643,8 +643,8 @@ _source_script
 _ensure_registry
 _register_session "proj-c" "/work" "uuid-c"
 out=$("$CLAUDE_TMUX" ls)
-assert_contains "ls shows SESSION ID header" "SESSION ID" "$out"
-assert_contains "ls shows uuid" "uuid-c" "$out"
+assert_contains "ls shows CWD header" "CWD" "$out"
+assert_contains "ls shows working dir" "/work" "$out"
 teardown
 
 # ─── 38. _capture_url extracts URL from tmux pane ────────────────────────────
@@ -865,7 +865,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.6.0" > "$outfile"
+  printf 'VERSION="%s"\n' "0.7.0" > "$outfile"
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
   echo "stub skill" > "$outfile"
 fi
@@ -934,6 +934,123 @@ for s in tmux-new tmux-ls tmux-kill tmux-attach; do
   [[ -f "${TEST_HOME}/.claude/skills/${s}/SKILL.md" ]] && skills_updated=$((skills_updated + 1))
 done
 assert_eq "all 4 skills updated" "4" "$skills_updated"
+teardown
+
+# ─── 55. register with --jira stores ticket ──────────────────────────────────
+echo "── 55. register with --jira"
+setup
+_source_script
+_ensure_registry
+_register_session "jira-proj" "/work" "uuid-jp" "" "PROJ-123"
+assert_json_field "jira stored" \
+  "${TEST_HOME}/.claude-tmux/sessions.json" "jira-proj" "jira" "PROJ-123"
+teardown
+
+# ─── 56. register without --jira has no jira field ────────────────────────────
+echo "── 56. register without --jira"
+setup
+_source_script
+_ensure_registry
+_register_session "no-jira" "/work" "uuid-nj"
+no_jira=$(python3 -c "
+import json
+with open('${TEST_HOME}/.claude-tmux/sessions.json') as f:
+    d=json.load(f)
+for s in d['sessions']:
+    if s['name']=='no-jira':
+        print('has_jira' if 'jira' in s else 'no_jira')
+")
+assert_eq "no jira field" "no_jira" "$no_jira"
+teardown
+
+# ─── 57. register with --jira + --tag + args ──────────────────────────────────
+echo "── 57. jira + tag + args combined"
+setup
+_source_script
+_ensure_registry
+_register_session "combo" "/work" "uuid-c" "dev" "PROJ-789" "--dangerously-skip-permissions"
+assert_json_field "jira stored"    "${TEST_HOME}/.claude-tmux/sessions.json" "combo" "jira" "PROJ-789"
+assert_json_array "tag stored"     "${TEST_HOME}/.claude-tmux/sessions.json" "combo" "tags" "dev"
+assert_json_array "args stored"    "${TEST_HOME}/.claude-tmux/sessions.json" "combo" "args" "--dangerously-skip-permissions"
+teardown
+
+# ─── 58. _write_new_script injects --append-system-prompt for JIRA ────────────
+echo "── 58. new script with JIRA prompt"
+setup
+_source_script
+_ensure_registry
+_write_new_script "jproj" "uuid-j" "/work" "${TEST_HOME}/bin/claude" "PROJ-123" > /dev/null
+content=$(cat "${TEST_HOME}/.claude-tmux/scripts/jproj.sh")
+assert_contains "script has --append-system-prompt" "--append-system-prompt" "$content"
+assert_contains "script mentions ticket" "PROJ-123" "$content"
+teardown
+
+# ─── 59. _write_new_script without JIRA has no system prompt ──────────────────
+echo "── 59. new script without JIRA"
+setup
+_source_script
+_ensure_registry
+_write_new_script "nojira" "uuid-nj" "/work" "${TEST_HOME}/bin/claude" "" > /dev/null
+content=$(cat "${TEST_HOME}/.claude-tmux/scripts/nojira.sh")
+assert_not_contains "no --append-system-prompt" "--append-system-prompt" "$content"
+teardown
+
+# ─── 60. _write_restore_script injects JIRA prompt ────────────────────────────
+echo "── 60. restore script with JIRA"
+setup
+_source_script
+_ensure_registry
+_write_restore_script "rjira" "uuid-rj" "/work" "${TEST_HOME}/bin/claude" "PROJ-456" > /dev/null
+content=$(cat "${TEST_HOME}/.claude-tmux/scripts/rjira.sh")
+assert_contains "restore has --append-system-prompt" "--append-system-prompt" "$content"
+assert_contains "restore mentions ticket" "PROJ-456" "$content"
+teardown
+
+# ─── 61. ls shows JIRA column ────────────────────────────────────────────────
+echo "── 61. ls JIRA column"
+setup
+_source_script
+_ensure_registry
+_register_session "j1" "/work" "uuid-j1" "" "PROJ-100"
+_register_session "j2" "/work" "uuid-j2" "" ""
+out=$("$CLAUDE_TMUX" ls)
+assert_contains "JIRA column header" "JIRA" "$out"
+assert_contains "jira ticket shown"  "PROJ-100" "$out"
+teardown
+
+# ─── 62. cmd_new --jira parsing ───────────────────────────────────────────────
+echo "── 62. cmd_new --jira parsing"
+setup
+_source_script
+_test_args=(-s "proj" --jira "PROJ-999" --model opus)
+_test_name="" _test_jira="" _test_extra=()
+while [[ ${#_test_args[@]} -gt 0 ]]; do
+  case "${_test_args[0]}" in
+    -s|--session) _test_name="${_test_args[1]}"; _test_args=("${_test_args[@]:2}") ;;
+    --jira)       _test_jira="${_test_args[1]}"; _test_args=("${_test_args[@]:2}") ;;
+    *)            _test_extra+=("${_test_args[0]}"); _test_args=("${_test_args[@]:1}") ;;
+  esac
+done
+assert_eq "name parsed"   "proj"      "$_test_name"
+assert_eq "jira parsed"   "PROJ-999"  "$_test_jira"
+assert_eq "extra arg"     "--model"   "${_test_extra[0]}"
+teardown
+
+# ─── 63. JIRA skills exist ───────────────────────────────────────────────────
+echo "── 63. JIRA skills"
+for skill in tmux-update-jira tmux-pick-ticket; do
+  skill_file="${REPO_DIR}/skills/${skill}/SKILL.md"
+  assert_file_exists "skill ${skill} exists" "$skill_file"
+  content=$(cat "$skill_file")
+  assert_contains "${skill}: has name" "name: ${skill}" "$content"
+  assert_contains "${skill}: has atlassian tools" "atlassian" "$content"
+done
+
+# ─── 64. help shows --jira ───────────────────────────────────────────────────
+echo "── 64. help shows --jira"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help shows --jira" "--jira" "$out"
 teardown
 
 # ─── summary ──────────────────────────────────────────────────────────────────

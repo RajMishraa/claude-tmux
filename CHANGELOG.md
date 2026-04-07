@@ -3,6 +3,18 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.0] - 2026-04-08
+
+### Added
+- **JIRA integration with `--jira PROJ-123`** — Link a session to a JIRA ticket. Claude
+  auto-fetches the ticket description via the Atlassian MCP on startup using
+  `--append-system-prompt`.
+- **`/tmux-update-jira` skill** — Summarizes session progress and posts it as a JIRA comment.
+- **`/tmux-pick-ticket` skill** — Searches for open tickets in a JIRA project and starts working.
+- `claude-tmux ls` shows a JIRA column when any session has a linked ticket.
+- JIRA ticket ID persisted in `sessions.json` and replayed on `restore`.
+- 140-test suite (+22 tests for JIRA storage, system prompt injection, ls display, skills).
+
 ## [0.6.0] - 2026-04-07
 
 ### Added

@@ -96,6 +96,13 @@ claude-tmux new -s api-refactor --tag dev --dangerously-skip-permissions
 claude-tmux new -s frontend-fix --tag dev
 ```
 
+Link a session to a JIRA ticket — Claude auto-fetches the ticket description on startup:
+
+```bash
+claude-tmux new -s api-fix --jira PROJ-123
+claude-tmux new -s ticket-triage --tag jira --jira PROJ-456 --dangerously-skip-permissions
+```
+
 If a session with that name already exists, this attaches to it instead of creating a new one.
 
 > Flags you pass are **saved** and replayed automatically if the session is restored after a reboot — no need to remember them.
@@ -164,6 +171,27 @@ claude-tmux restore
 Recreates all `active` sessions and resumes their Claude conversations from where they left off.
 
 **This runs automatically on macOS login** — you only need to call it manually on Linux or if you want to restore immediately without rebooting.
+
+---
+
+## JIRA integration
+
+Link sessions to JIRA tickets. Claude auto-fetches the ticket description on startup and can post progress updates.
+
+```bash
+# Start working on a ticket
+claude-tmux new -s api-fix --jira PROJ-123
+
+# Inside the session, post a progress update to JIRA
+/tmux-update-jira
+
+# Pick an open ticket from a project
+/tmux-pick-ticket PROJ
+```
+
+Sessions linked to JIRA show the ticket ID in `claude-tmux ls`. The JIRA context is preserved across restores.
+
+**Requires:** The [Atlassian plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) must be authenticated in Claude Code. Run `/atlassian:authenticate` in any session to set it up.
 
 ---
 
