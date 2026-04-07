@@ -891,7 +891,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.3" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.4" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1231,7 +1231,7 @@ teardown
 echo "── 78. version is 0.8.3"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.3" "0.8.3" "$out"
+assert_contains "version is 0.8.4" "0.8.4" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────

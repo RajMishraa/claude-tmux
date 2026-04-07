@@ -3,6 +3,16 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.4] - 2026-04-08
+
+### Fixed
+- **Uninstall removes Claude skills** — `uninstall.sh` now deletes all 13 `tmux-*` skills from
+  `~/.claude/skills/`. Previously they remained visible in Claude after uninstalling.
+- **Shared team files use absolute paths** — `tmux-team-sync`, `tmux-handoff`, and `tmux-review`
+  now write to `~/.claude-tmux/team/`, `~/.claude-tmux/handoffs/`, and `~/.claude-tmux/reviews/`
+  respectively. Relative paths (`.claude-team/` etc.) were inaccessible when agents ran in
+  different working directories.
+
 ## [0.8.3] - 2026-04-08
 
 ### Added
