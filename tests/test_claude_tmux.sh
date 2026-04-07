@@ -250,11 +250,11 @@ echo "── 7. register session (with extra args)"
 setup
 _source_script
 _ensure_registry
-_register_session "proj-skip" "/work" "uuid-def" "--dangerously-skip-permissions"
+_register_session "proj-skip" "/work" "uuid-def" "" "--dangerously-skip-permissions"
 assert_json_array "dangerously flag stored in args" \
   "${TEST_HOME}/.claude-tmux/sessions.json" "proj-skip" "args" "--dangerously-skip-permissions"
 
-_register_session "proj-model" "/work" "uuid-ghi" "--model" "opus"
+_register_session "proj-model" "/work" "uuid-ghi" "" "--model" "opus"
 assert_json_array "model flag stored" \
   "${TEST_HOME}/.claude-tmux/sessions.json" "proj-model" "args" "--model"
 assert_json_array "model value stored" \
@@ -465,8 +465,8 @@ echo "── 23. multiple sessions in same directory"
 setup
 _source_script
 _ensure_registry
-_register_session "proj-a" "/shared/dir" "uuid-a" "--dangerously-skip-permissions"
-_register_session "proj-b" "/shared/dir" "uuid-b" "--model" "opus"
+_register_session "proj-a" "/shared/dir" "uuid-a" "" "--dangerously-skip-permissions"
+_register_session "proj-b" "/shared/dir" "uuid-b" "" "--model" "opus"
 _register_session "proj-c" "/shared/dir" "uuid-c"
 count=$(python3 -c "
 import json
@@ -487,7 +487,7 @@ echo "── 24. restore single — replays stored args"
 setup
 _source_script
 _ensure_registry
-_register_session "restore-proj" "/work" "uuid-r" "--dangerously-skip-permissions" "--model" "sonnet"
+_register_session "restore-proj" "/work" "uuid-r" "" "--dangerously-skip-permissions" "--model" "sonnet"
 _restore_single "restore-proj"
 script="${TEST_HOME}/.claude-tmux/scripts/restore-proj.sh"
 assert_file_exists "restore script created" "$script"
@@ -690,6 +690,106 @@ echo "── 40. help shows url"
 setup
 out=$("$CLAUDE_TMUX" help)
 assert_contains "help shows url command" "url -s" "$out"
+teardown
+
+# ─── 41. register session with tag ────────────────────────────────────────────
+echo "── 41. register with tag"
+setup
+_source_script
+_ensure_registry
+_register_session "jira-task" "/work" "uuid-j" "jira"
+assert_json_field "tag stored" \
+  "${TEST_HOME}/.claude-tmux/sessions.json" "jira-task" "tag" "jira"
+teardown
+
+# ─── 42. register session without tag ────────────────────────────────────────
+echo "── 42. register without tag"
+setup
+_source_script
+_ensure_registry
+_register_session "no-tag" "/work" "uuid-nt"
+no_tag=$(python3 -c "
+import json
+with open('${TEST_HOME}/.claude-tmux/sessions.json') as f:
+    d=json.load(f)
+for s in d['sessions']:
+    if s['name']=='no-tag':
+        print('has_tag' if 'tag' in s else 'no_tag')
+")
+assert_eq "no tag field when none passed" "no_tag" "$no_tag"
+teardown
+
+# ─── 43. multiple sessions with same tag ─────────────────────────────────────
+echo "── 43. multiple sessions with same tag"
+setup
+_source_script
+_ensure_registry
+_register_session "j1" "/work" "uuid-j1" "jira"
+_register_session "j2" "/work" "uuid-j2" "jira"
+_register_session "d1" "/work" "uuid-d1" "dev"
+count=$(python3 -c "
+import json
+with open('${TEST_HOME}/.claude-tmux/sessions.json') as f:
+    d=json.load(f)
+print(len([s for s in d['sessions'] if s.get('tag')=='jira']))
+")
+assert_eq "two jira-tagged sessions" "2" "$count"
+teardown
+
+# ─── 44. ls --tag filters by tag ─────────────────────────────────────────────
+echo "── 44. ls --tag filter"
+setup
+_source_script
+_ensure_registry
+_register_session "j1" "/work" "uuid-j1" "jira"
+_register_session "j2" "/work" "uuid-j2" "jira"
+_register_session "d1" "/work" "uuid-d1" "dev"
+out=$("$CLAUDE_TMUX" ls --tag jira)
+assert_contains     "ls tag filter shows j1" "j1" "$out"
+assert_contains     "ls tag filter shows j2" "j2" "$out"
+assert_not_contains "ls tag filter hides d1" "d1" "$out"
+teardown
+
+# ─── 45. ls --tag with no matches ────────────────────────────────────────────
+echo "── 45. ls --tag no matches"
+setup
+_source_script
+_ensure_registry
+_register_session "d1" "/work" "uuid-d1" "dev"
+out=$("$CLAUDE_TMUX" ls --tag nonexistent)
+assert_contains "no matches message" "No sessions with tag" "$out"
+teardown
+
+# ─── 46. ls shows TAG column when tags exist ──────────────────────────────────
+echo "── 46. ls TAG column"
+setup
+_source_script
+_ensure_registry
+_register_session "tagged" "/work" "uuid-t" "mygroup"
+_register_session "untagged" "/work" "uuid-u"
+out=$("$CLAUDE_TMUX" ls)
+assert_contains "TAG column header" "TAG" "$out"
+assert_contains "tag value shown"   "mygroup" "$out"
+teardown
+
+# ─── 47. cmd_new parses --tag correctly ───────────────────────────────────────
+echo "── 47. cmd_new --tag parsing"
+setup
+_source_script
+# Simulate arg parsing
+_test_args=(-s "proj" --tag "jira" --model opus)
+_test_name="" _test_tag="" _test_extra=()
+while [[ ${#_test_args[@]} -gt 0 ]]; do
+  case "${_test_args[0]}" in
+    -s|--session) _test_name="${_test_args[1]}"; _test_args=("${_test_args[@]:2}") ;;
+    --tag)        _test_tag="${_test_args[1]}";  _test_args=("${_test_args[@]:2}") ;;
+    *)            _test_extra+=("${_test_args[0]}"); _test_args=("${_test_args[@]:1}") ;;
+  esac
+done
+assert_eq "name parsed"   "proj"    "$_test_name"
+assert_eq "tag parsed"    "jira"    "$_test_tag"
+assert_eq "extra arg"     "--model" "${_test_extra[0]}"
+assert_eq "extra val"     "opus"    "${_test_extra[1]}"
 teardown
 
 # ─── summary ──────────────────────────────────────────────────────────────────

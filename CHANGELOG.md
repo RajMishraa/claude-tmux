@@ -3,6 +3,16 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0] - 2026-04-07
+
+### Added
+- **Session grouping with `--tag`** — Group sessions by task, team, or purpose:
+  `claude-tmux new -s ticket-triage --tag jira`. Tags are stored in the registry and
+  shown in `ls` output.
+- **`claude-tmux ls --tag <group>`** — Filter sessions by tag. Only shows matching sessions.
+- `ls` output now includes a TAG column when any session has a tag.
+- 108-test suite (+15 tests for tag storage, filtering, multi-tag, arg parsing).
+
 ## [0.4.1] - 2026-04-07
 
 ### Added

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.4.1"
+VERSION="0.5.0"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
 SCRIPTS_DIR="${SESSIONS_DIR}/scripts"
@@ -79,9 +79,9 @@ with open(path) as f:
 op = args[0]
 
 if op == "register":
-    # argv: name cwd ts session_id [extra_arg ...]
-    name, cwd, ts, session_id = args[1], args[2], args[3], args[4]
-    extra = args[5:]
+    # argv: name cwd ts session_id tag [extra_arg ...]
+    name, cwd, ts, session_id, tag = args[1], args[2], args[3], args[4], args[5]
+    extra = args[6:]
     data["sessions"] = [s for s in data["sessions"] if s["name"] != name]
     entry = {
         "name": name,
@@ -90,6 +90,8 @@ if op == "register":
         "created_at": ts,
         "status": "active",
     }
+    if tag:
+        entry["tag"] = tag
     if extra:
         entry["args"] = extra
     data["sessions"].append(entry)
@@ -115,12 +117,12 @@ PYEOF
 }
 
 _register_session() {
-  # _register_session <name> <cwd> <session_id> [extra_args...]
-  local name="$1" cwd="$2" session_id="$3"
-  shift 3
+  # _register_session <name> <cwd> <session_id> <tag> [extra_args...]
+  local name="$1" cwd="$2" session_id="$3" tag="${4:-}"
+  shift 4 2>/dev/null || shift 3
   local ts
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  _json_write "$SESSIONS_FILE" register "$name" "$cwd" "$ts" "$session_id" "$@"
+  _json_write "$SESSIONS_FILE" register "$name" "$cwd" "$ts" "$session_id" "$tag" "$@"
 }
 
 _update_session_status() {
@@ -134,7 +136,7 @@ _set_session_url() {
 # Capture URL from tmux pane output.
 _capture_url() {
   local name="$1"
-  tmux capture-pane -t "$name" -p 2>/dev/null | grep -oE 'https://[^ ]+' | tail -1
+  tmux capture-pane -t "$name" -p 2>/dev/null | grep -oE 'https://[^ ]+' | tail -1 || true
 }
 
 # Read stored URL from registry.
@@ -215,9 +217,10 @@ claude-tmux v${VERSION} — tmux session manager for Claude Code
 https://github.com/RajMishraa/claude-tmux
 
 Usage:
-  claude-tmux new -s <name> [<claude-args...>]   Create & attach new session
+  claude-tmux new -s <name> [--tag <group>] [<claude-args...>]
+                                                 Create & attach new session
   claude-tmux attach -s <name>                   Attach to existing session
-  claude-tmux ls                                 List all sessions
+  claude-tmux ls [--tag <group>]                 List all sessions (optionally filter by tag)
   claude-tmux url -s <name>                      Show/refresh session URL
   claude-tmux restore                            Restore active sessions (runs at login)
   claude-tmux kill -s <name>                     Kill a session
@@ -225,10 +228,10 @@ Usage:
 
 Examples:
   claude-tmux new -s uan-project
-  claude-tmux new -s uan-project --dangerously-skip-permissions
-  claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
+  claude-tmux new -s ticket-triage --tag jira
+  claude-tmux new -s api-refactor --tag dev --dangerously-skip-permissions
+  claude-tmux ls --tag jira
   claude-tmux url -s uan-project
-  claude-tmux attach -s uan-project
   claude-tmux ls
   claude-tmux kill -s uan-project
 EOF
@@ -237,14 +240,15 @@ EOF
 # ── subcommands ───────────────────────────────────────────────────────────────
 
 cmd_new() {
-  local name="" extra_args=()
+  local name="" tag="" extra_args=()
 
-  # All args except -s/--session are passed directly to claude.
-  # No -- separator needed.
+  # -s/--session and --tag are consumed by claude-tmux.
+  # All other args are passed directly to claude.
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -s|--session) name="$2"; shift 2 ;;
-      *) extra_args+=("$1"); shift ;;
+      --tag)        tag="$2"; shift 2 ;;
+      *)            extra_args+=("$1"); shift ;;
     esac
   done
 
@@ -263,7 +267,7 @@ cmd_new() {
   session_id=$(_generate_uuid)
   claude_bin=$(_claude_bin)
 
-  _register_session "$name" "$cwd" "$session_id" "${extra_args[@]+"${extra_args[@]}"}"
+  _register_session "$name" "$cwd" "$session_id" "$tag" "${extra_args[@]+"${extra_args[@]}"}"
 
   local startup
   startup=$(_write_new_script "$name" "$session_id" "$cwd" "$claude_bin" \
@@ -275,6 +279,7 @@ cmd_new() {
   echo "Started claude-tmux session: $name"
   echo "  Session ID  : $session_id"
   echo "  Working dir : $cwd"
+  [[ -n "$tag" ]] && echo "  Tag         : $tag"
   echo "  Resume cmd  : claude-tmux attach -s $name"
 
   # Auto-capture remote URL (Claude prints it on startup if remote access is on)
@@ -360,6 +365,14 @@ cmd_url() {
 }
 
 cmd_ls() {
+  local filter_tag=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tag) filter_tag="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
   _ensure_registry
 
   local live_sessions=()
@@ -367,43 +380,56 @@ cmd_ls() {
     [[ -n "$line" ]] && live_sessions+=("$line")
   done < <(tmux ls -F "#{session_name}" 2>/dev/null || true)
 
-  python3 - "$SESSIONS_FILE" "${live_sessions[*]:-}" <<'PYEOF'
+  python3 - "$SESSIONS_FILE" "${live_sessions[*]:-}" "$filter_tag" <<'PYEOF'
 import json, sys
 
 path = sys.argv[1]
 live = set(sys.argv[2].split()) if len(sys.argv) > 2 and sys.argv[2] else set()
+filter_tag = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else ""
 
 with open(path) as f:
     data = json.load(f)
 
 sessions = data.get("sessions", [])
+if filter_tag:
+    sessions = [s for s in sessions if s.get("tag", "") == filter_tag]
+
 if not sessions:
-    print("No sessions registered.")
+    if filter_tag:
+        print(f"No sessions with tag '{filter_tag}'.")
+    else:
+        print("No sessions registered.")
     sys.exit(0)
 
+has_tags = any(s.get("tag") for s in sessions)
 has_urls = any(s.get("url") for s in sessions)
 
+header_parts = [f"{'NAME':<22}", f"{'STATE':<10}"]
+if has_tags:
+    header_parts.append(f"{'TAG':<14}")
+header_parts.append(f"{'CREATED':<22}")
 if has_urls:
-    print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'URL'}")
-    print("-" * 100)
-    for s in sessions:
-        name       = s["name"]
-        reg_status = s.get("status", "unknown")
-        state      = "[live]" if name in live else f"[{reg_status}]"
-        created    = s.get("created_at", "")[:19].replace("T", " ")
-        url        = s.get("url", "")
-        print(f"{name:<22} {state:<10} {created:<22} {url}")
+    header_parts.append("URL")
 else:
-    print(f"{'NAME':<22} {'STATE':<10} {'CREATED':<22} {'SESSION ID':<36} CWD")
-    print("-" * 110)
-    for s in sessions:
-        name       = s["name"]
-        reg_status = s.get("status", "unknown")
-        state      = "[live]" if name in live else f"[{reg_status}]"
-        created    = s.get("created_at", "")[:19].replace("T", " ")
-        sid        = s.get("session_id", "n/a")
-        cwd        = s.get("cwd", "")
-        print(f"{name:<22} {state:<10} {created:<22} {sid:<36} {cwd}")
+    header_parts.extend([f"{'SESSION ID':<36}", "CWD"])
+print(" ".join(header_parts))
+print("-" * 120)
+
+for s in sessions:
+    name       = s["name"]
+    reg_status = s.get("status", "unknown")
+    state      = "[live]" if name in live else f"[{reg_status}]"
+    tag        = s.get("tag", "")
+    created    = s.get("created_at", "")[:19].replace("T", " ")
+    parts = [f"{name:<22}", f"{state:<10}"]
+    if has_tags:
+        parts.append(f"{tag:<14}")
+    parts.append(f"{created:<22}")
+    if has_urls:
+        parts.append(s.get("url", ""))
+    else:
+        parts.extend([f"{s.get('session_id', 'n/a'):<36}", s.get("cwd", "")])
+    print(" ".join(parts))
 PYEOF
 }
 
@@ -518,7 +544,7 @@ subcmd="$1"; shift
 case "$subcmd" in
   new)                  cmd_new "$@" ;;
   attach)               cmd_attach "$@" ;;
-  ls)                   cmd_ls ;;
+  ls)                   cmd_ls "$@" ;;
   url)                  cmd_url "$@" ;;
   restore)              cmd_restore ;;
   kill)                 cmd_kill "$@" ;;

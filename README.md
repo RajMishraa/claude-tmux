@@ -84,6 +84,18 @@ claude-tmux new -s uan-project --model opus
 claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
 ```
 
+Group sessions by tag:
+
+```bash
+# Team of agents working on JIRA tasks
+claude-tmux new -s ticket-triage --tag jira
+claude-tmux new -s backlog-grooming --tag jira
+
+# Development agents
+claude-tmux new -s api-refactor --tag dev --dangerously-skip-permissions
+claude-tmux new -s frontend-fix --tag dev
+```
+
 If a session with that name already exists, this attaches to it instead of creating a new one.
 
 > Flags you pass are **saved** and replayed automatically if the session is restored after a reboot — no need to remember them.
@@ -103,11 +115,12 @@ Reattaches your terminal to a running session. If the session isn't running, you
 ### `ls` — see all sessions
 
 ```bash
-claude-tmux ls
+claude-tmux ls             # all sessions
+claude-tmux ls --tag jira  # only jira sessions
 ```
 
 ```
-NAME                   STATE      CREATED                CWD
+NAME                   STATE      TAG            CREATED                CWD
 ──────────────────────────────────────────────────────────────────────
 uan-project            [live]     2026-04-02 14:30:00    /work/uan
 api-refactor           [active]   2026-04-01 09:15:00    /work/api
