@@ -1053,6 +1053,70 @@ out=$("$CLAUDE_TMUX" help)
 assert_contains "help shows --jira" "--jira" "$out"
 teardown
 
+# ─── 65. cmd_jira set mode ────────────────────────────────────────────────────
+echo "── 65. cmd_jira set"
+setup
+_source_script
+_ensure_registry
+_register_session "link-test" "/work" "uuid-lt"
+out=$("$CLAUDE_TMUX" jira -s link-test PROJ-999)
+assert_contains "reports linked" "Linked" "$out"
+assert_contains "shows ticket" "PROJ-999" "$out"
+assert_json_field "jira stored in registry" \
+  "${TEST_HOME}/.claude-tmux/sessions.json" "link-test" "jira" "PROJ-999"
+teardown
+
+# ─── 66. cmd_jira get mode ────────────────────────────────────────────────────
+echo "── 66. cmd_jira get"
+setup
+_source_script
+_ensure_registry
+_register_session "get-jira" "/work" "uuid-gj"
+_set_session_jira "get-jira" "PROJ-888"
+out=$("$CLAUDE_TMUX" jira -s get-jira)
+assert_eq "prints jira ticket" "PROJ-888" "$out"
+teardown
+
+# ─── 67. cmd_jira get with no ticket ─────────────────────────────────────────
+echo "── 67. cmd_jira get (none set)"
+setup
+_source_script
+_ensure_registry
+_register_session "no-jira-2" "/work" "uuid-nj2"
+out=$("$CLAUDE_TMUX" jira -s no-jira-2 2>&1 || true)
+assert_contains "reports no ticket" "No JIRA ticket" "$out"
+teardown
+
+# ─── 68. cmd_jira overwrites existing ticket ──────────────────────────────────
+echo "── 68. cmd_jira overwrite"
+setup
+_source_script
+_ensure_registry
+_register_session "overwrite" "/work" "uuid-ow"
+"$CLAUDE_TMUX" jira -s overwrite PROJ-100 > /dev/null
+"$CLAUDE_TMUX" jira -s overwrite PROJ-200 > /dev/null
+out=$("$CLAUDE_TMUX" jira -s overwrite)
+assert_eq "overwritten to new ticket" "PROJ-200" "$out"
+teardown
+
+# ─── 69. /tmux-link-jira skill exists ─────────────────────────────────────────
+echo "── 69. tmux-link-jira skill"
+skill_file="${REPO_DIR}/skills/tmux-link-jira/SKILL.md"
+assert_file_exists "skill exists" "$skill_file"
+content=$(cat "$skill_file")
+assert_contains "has name"         "name: tmux-link-jira"     "$content"
+assert_contains "has atlassian"    "atlassian"                 "$content"
+assert_contains "has tmux detect"  "tmux display-message"      "$content"
+assert_contains "has claude-tmux"  "claude-tmux jira"          "$content"
+assert_contains "has argument-hint" "argument-hint:"           "$content"
+
+# ─── 70. help shows jira subcommand ──────────────────────────────────────────
+echo "── 70. help shows jira subcommand"
+setup
+out=$("$CLAUDE_TMUX" help)
+assert_contains "help shows jira command" "jira -s" "$out"
+teardown
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════"

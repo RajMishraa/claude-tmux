@@ -179,10 +179,16 @@ Recreates all `active` sessions and resumes their Claude conversations from wher
 Link sessions to JIRA tickets. Claude auto-fetches the ticket description on startup and can post progress updates.
 
 ```bash
-# Start working on a ticket
+# Start working on a ticket (set at creation)
 claude-tmux new -s api-fix --jira PROJ-123
 
-# Inside the session, post a progress update to JIRA
+# Or link an existing session to a ticket (from inside Claude)
+/tmux-link-jira PROJ-123
+
+# Or link from the CLI
+claude-tmux jira -s api-fix PROJ-123
+
+# Post a progress update to JIRA
 /tmux-update-jira
 
 # Pick an open ticket from a project

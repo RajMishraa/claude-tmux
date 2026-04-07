@@ -3,6 +3,16 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.1] - 2026-04-08
+
+### Added
+- **`claude-tmux jira -s <name> [TICKET-ID]`** — Get or set JIRA ticket for an existing session.
+  Set: `claude-tmux jira -s my-task PROJ-123`. Get: `claude-tmux jira -s my-task`.
+- **`/tmux-link-jira` skill** — Link the current session to a JIRA ticket from inside Claude.
+  Auto-detects the tmux session name, stores the ticket, fetches details via Atlassian MCP,
+  and starts working. Pass a ticket ID or let Claude search for one.
+- 153-test suite (+13 tests for jira get/set, overwrite, skill validation).
+
 ## [0.7.0] - 2026-04-08
 
 ### Added

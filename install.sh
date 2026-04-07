@@ -59,7 +59,7 @@ echo "  ✓ Installed binary → ${BIN_TARGET}"
 # ── 2. install skills ─────────────────────────────────────────────────────────
 
 SKILLS_TARGET="${HOME}/.claude/skills"
-ALL_SKILLS="tmux-new tmux-ls tmux-kill tmux-attach tmux-update-jira tmux-pick-ticket"
+ALL_SKILLS="tmux-new tmux-ls tmux-kill tmux-attach tmux-update-jira tmux-pick-ticket tmux-link-jira"
 
 if [[ -n "$_script_dir" && -d "${_script_dir}/skills" ]]; then
   for skill_name in $ALL_SKILLS; do
