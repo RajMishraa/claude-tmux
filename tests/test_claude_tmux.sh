@@ -866,6 +866,8 @@ for arg in "$@"; do
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
   printf 'VERSION="%s"\n' "0.8.0" > "$outfile"
+elif [[ "$*" == *"install.sh"* ]]; then
+  echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
   echo "stub skill" > "$outfile"
 fi
@@ -893,6 +895,8 @@ for arg in "$@"; do
 done
 if [[ "$*" == *"bin/claude-tmux"* && -n "$outfile" ]]; then
   printf '#!/usr/bin/env bash\nVERSION="99.0.0"\necho "new binary"\n' > "$outfile"
+elif [[ "$*" == *"install.sh"* ]]; then
+  echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
   printf '---\nname: stub-skill\n---\n' > "$outfile"
 fi
@@ -923,6 +927,9 @@ for arg in "$@"; do
 done
 if [[ "$*" == *"bin/claude-tmux"* && -n "$outfile" ]]; then
   printf '#!/usr/bin/env bash\nVERSION="99.0.0"\n' > "$outfile"
+elif [[ "$*" == *"install.sh"* ]]; then
+  # stdout mode — used to fetch ALL_SKILLS list
+  echo 'ALL_SKILLS="tmux-new tmux-ls tmux-kill tmux-attach"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
   printf '---\nname: updated-skill\n---\n' > "$outfile"
 fi
