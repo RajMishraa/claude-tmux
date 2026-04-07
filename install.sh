@@ -56,7 +56,33 @@ fi
 chmod +x "${BIN_TARGET}"
 echo "  ✓ Installed binary → ${BIN_TARGET}"
 
-# ── 2. session registry ───────────────────────────────────────────────────────
+# ── 2. install skills ─────────────────────────────────────────────────────────
+
+SKILLS_TARGET="${HOME}/.claude/skills"
+ALL_SKILLS="tmux-new tmux-ls tmux-kill tmux-attach tmux-update-jira tmux-pick-ticket"
+
+if [[ -n "$_script_dir" && -d "${_script_dir}/skills" ]]; then
+  for skill_name in $ALL_SKILLS; do
+    if [[ -f "${_script_dir}/skills/${skill_name}/SKILL.md" ]]; then
+      mkdir -p "${SKILLS_TARGET}/${skill_name}"
+      cp "${_script_dir}/skills/${skill_name}/SKILL.md" "${SKILLS_TARGET}/${skill_name}/SKILL.md"
+    fi
+  done
+else
+  for skill_name in $ALL_SKILLS; do
+    mkdir -p "${SKILLS_TARGET}/${skill_name}"
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL "${GITHUB_RAW}/skills/${skill_name}/SKILL.md" \
+        -o "${SKILLS_TARGET}/${skill_name}/SKILL.md" 2>/dev/null || true
+    elif command -v wget >/dev/null 2>&1; then
+      wget -qO "${SKILLS_TARGET}/${skill_name}/SKILL.md" \
+        "${GITHUB_RAW}/skills/${skill_name}/SKILL.md" 2>/dev/null || true
+    fi
+  done
+fi
+echo "  ✓ Claude skills → ${SKILLS_TARGET}/"
+
+# ── 3. session registry ───────────────────────────────────────────────────────
 
 mkdir -p "${SESSIONS_DIR}"
 if [[ ! -f "${SESSIONS_FILE}" ]]; then
@@ -64,7 +90,7 @@ if [[ ! -f "${SESSIONS_FILE}" ]]; then
 fi
 echo "  ✓ Session registry → ${SESSIONS_FILE}"
 
-# ── 3. auto-restore on login ──────────────────────────────────────────────────
+# ── 4. auto-restore on login ──────────────────────────────────────────────────
 
 if [[ "$(uname)" == "Darwin" ]]; then
   # macOS: LaunchAgent
@@ -101,7 +127,7 @@ else
   echo "       claude-tmux restore &"
 fi
 
-# ── 4. PATH check ─────────────────────────────────────────────────────────────
+# ── 5. PATH check ─────────────────────────────────────────────────────────────
 
 if [[ ":${PATH}:" != *":${HOME}/.local/bin:"* ]]; then
   echo ""
