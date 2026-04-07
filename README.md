@@ -65,10 +65,10 @@ cd claude-tmux
 ### `new` — start a session
 
 ```bash
-claude-tmux new -s <name> [claude flags...]
+claude-tmux new -s <name> [--tag <tag>] [--jira <TICKET>] [-d] [claude flags...]
 ```
 
-Creates a tmux session and starts Claude inside it. Any flags after the session name are forwarded directly to Claude.
+Creates a tmux session and starts Claude inside it. Any unrecognized flags are forwarded directly to Claude.
 
 ```bash
 # Plain session
@@ -80,8 +80,8 @@ claude-tmux new -s uan-project --dangerously-skip-permissions
 # Choose a model
 claude-tmux new -s uan-project --model opus
 
-# Combine flags
-claude-tmux new -s uan-project --model opus --dangerously-skip-permissions
+# Create without attaching (for scripting / team creation)
+claude-tmux new -s uan-project --detach
 ```
 
 Group sessions by tag:
@@ -101,6 +101,16 @@ Link a session to a JIRA ticket — Claude auto-fetches the ticket description o
 ```bash
 claude-tmux new -s api-fix --jira PROJ-123
 claude-tmux new -s ticket-triage --tag jira --jira PROJ-456 --dangerously-skip-permissions
+```
+
+Create multiple sessions at once without switching away (used by `/tmux-team-create`):
+
+```bash
+claude-tmux new -s agent-1 --tag sprint-7 --jira PROJ-100 --detach
+claude-tmux new -s agent-2 --tag sprint-7 --jira PROJ-101 --detach
+claude-tmux new -s agent-3 --tag sprint-7 --jira PROJ-102 --detach
+# All three are running; attach to any one:
+claude-tmux attach -s agent-1
 ```
 
 If a session with that name already exists, this attaches to it instead of creating a new one.
