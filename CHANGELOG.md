@@ -3,6 +3,14 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.7] - 2026-04-09
+
+### Fixed
+- **JIRA fetch no longer requires a manual prompt** — `--append-system-prompt` sets a standing
+  instruction that Claude reads but won't act on until a message arrives. When `--jira` is set
+  and no `--message` was provided, claude-tmux now auto-injects an initial message on startup
+  that triggers Claude to fetch the ticket details via Atlassian MCP immediately.
+
 ## [0.8.6] - 2026-04-08
 
 ### Added
