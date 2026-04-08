@@ -55,17 +55,18 @@ Ask: "Create these sessions? (yes/no)"
 
 ### 3. Create sessions
 
-For each session, run with `--detach` to create all sessions quickly without switching away or waiting for URL capture:
+For each session, use `--detach` (no attach/wait) and optionally `--message` to give each agent its starting task:
 
 ```bash
-# With JIRA ticket
+# With JIRA ticket (Claude auto-fetches ticket description on startup)
 claude-tmux new -s <session-name> --tag <tag> --jira <TICKET-ID> --detach
 
-# Without JIRA
-claude-tmux new -s <session-name> --tag <tag> --detach
+# Without JIRA — use --message to give the agent its task
+claude-tmux new -s <session-name> --tag <tag> --detach \
+  --message "Implement the login endpoint. Write tests in tests/test_auth.py."
 ```
 
-> `--detach` skips the 5-second URL capture wait and the `tmux attach`. All sessions are created immediately. Claude will auto-fetch the ticket description on startup if `--jira` was set.
+> `--detach` skips the 5-second URL capture wait and `tmux attach` so all sessions are created immediately. `--message` sends the initial prompt once Claude's interactive session is ready (3s delay). Do NOT use `-p/--print` — it runs Claude non-interactively and exits immediately.
 
 ### 4. Confirm and guide
 
