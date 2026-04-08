@@ -193,19 +193,14 @@ Recreates all `active` sessions and resumes their Claude conversations from wher
 
 Spin up a team of Claude agents, each working on their own task or JIRA ticket, all coordinated from a single session.
 
-### Workflow example
+### Workflow example — with JIRA
 
 ```bash
 # Plan the work — reads a JIRA Epic and generates a Work Breakdown Structure
 /tmux-plan PROJ-EPIC-50
 
-# Create a team from multiple tickets at once
+# Create a team from multiple tickets at once (Claude fetches each ticket's description)
 /tmux-team-create --tag sprint-7 --jira PROJ-100,PROJ-101,PROJ-102
-
-# Each command above creates separate sessions:
-#   proj-100-fix-auth    [live]  tag: sprint-7
-#   proj-101-add-oauth   [live]  tag: sprint-7
-#   proj-102-api-docs    [live]  tag: sprint-7
 
 # Check what each agent is doing
 /tmux-team-status --tag sprint-7
@@ -218,6 +213,29 @@ Spin up a team of Claude agents, each working on their own task or JIRA ticket, 
 
 # Review another agent's work before marking a ticket done
 /tmux-review proj-101-add-oauth
+```
+
+### Workflow example — without JIRA
+
+Use `--message` to give each agent its starting task:
+
+```bash
+# Create three agents, each with a different task
+claude-tmux new -s agent-auth     --tag api-team --detach \
+  --message "Build the user authentication API in src/auth/. Use JWT. Write tests in tests/test_auth.py."
+
+claude-tmux new -s agent-payments --tag api-team --detach \
+  --message "Build the payments API in src/payments/. Integrate Stripe. Write tests."
+
+claude-tmux new -s agent-docs     --tag api-team --detach \
+  --message "Write OpenAPI docs for all endpoints in src/. Output to docs/api.yaml."
+
+# Check progress
+claude-tmux ls --tag api-team
+
+# Coordinate
+/tmux-team-status --tag api-team
+/tmux-team-sync --tag api-team
 ```
 
 ### All multi-agent skills
