@@ -364,6 +364,13 @@ cmd_new() {
   [[ -n "$initial_message" ]] && echo "  Message     : $initial_message"
   echo "  Resume cmd  : claude-tmux attach -s $name"
 
+  # When --jira is set and no explicit --message was given, auto-send a prompt
+  # so Claude actually fetches the ticket on startup. --append-system-prompt alone
+  # only sets a standing instruction — Claude won't act on it until a message arrives.
+  if [[ -n "$jira" && -z "$initial_message" ]]; then
+    initial_message="Fetch the details for JIRA ticket ${jira} using the Atlassian MCP tools, then summarise the ticket (summary, description, acceptance criteria, status) so we can get started."
+  fi
+
   # Send initial message after Claude's interactive prompt appears
   if [[ -n "$initial_message" ]]; then
     sleep 3
