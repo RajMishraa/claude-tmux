@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.8.5"
+VERSION="0.8.6"
 GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
@@ -265,6 +265,7 @@ Usage:
   claude-tmux url -s <name>                      Show/refresh session URL
   claude-tmux restore                            Restore active sessions (runs at login)
   claude-tmux kill -s <name>                     Kill a session
+  claude-tmux purge [-s <name>] [--dry-run]      Remove killed session(s) from registry
   claude-tmux upgrade                            Upgrade to the latest version
   claude-tmux version                            Print version
 
@@ -678,6 +679,123 @@ cmd_kill() {
   echo "Marked as killed in registry."
 }
 
+cmd_purge() {
+  local name="" dry_run=0
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session) name="$2"; shift 2 ;;
+      --dry-run)    dry_run=1; shift ;;
+      *) echo "Error: unknown option '$1'" >&2; exit 1 ;;
+    esac
+  done
+
+  [[ -n "$name" ]] && _validate_name "$name"
+  _ensure_registry
+
+  local mode="all"
+  [[ -n "$name" ]] && mode="one"
+
+  local tmp="${SESSIONS_FILE}.tmp.$$"
+
+  # Collect names to purge (and validate for single-session mode).
+  # Use $() so we can reliably capture the Python exit code.
+  # Pass dry_run so Python skips the JSON write when previewing.
+  local py_out py_exit
+  set +e
+  py_out=$(python3 - "$SESSIONS_FILE" "$tmp" "$mode" "${name:-}" "$dry_run" <<'PYEOF'
+import json, sys, os
+
+path, tmp, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+target  = sys.argv[4] if len(sys.argv) > 4 else ""
+dry_run = sys.argv[5] == "1" if len(sys.argv) > 5 else False
+
+with open(path) as f:
+    data = json.load(f)
+
+sessions = data.get("sessions", [])
+to_purge = []
+
+if mode == "one":
+    match = next((s for s in sessions if s["name"] == target), None)
+    if not match:
+        print("ERROR:not_found")
+        sys.exit(1)
+    status = match.get("status", "unknown")
+    if status != "killed":
+        print(f"ERROR:not_killed:{status}")
+        sys.exit(2)
+    to_purge = [target]
+else:
+    to_purge = [s["name"] for s in sessions if s.get("status") == "killed"]
+
+if not to_purge:
+    sys.exit(0)
+
+if not dry_run:
+    data["sessions"] = [s for s in sessions if s["name"] not in to_purge]
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+for n in to_purge:
+    print(n)
+PYEOF
+  )
+  py_exit=$?
+  set -e
+
+  # Parse output into array
+  local purged_names=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && purged_names+=("$line")
+  done <<< "$py_out"
+
+  # Handle errors signalled by Python
+  if [[ $py_exit -ne 0 ]]; then
+    local err_line="${purged_names[0]:-}"
+    case "$err_line" in
+      ERROR:not_found)
+        echo "Error: session '${name}' not found in registry." >&2 ;;
+      ERROR:not_killed:*)
+        local actual_status="${err_line#ERROR:not_killed:}"
+        echo "Error: session '${name}' is [${actual_status}], not killed." >&2
+        echo "       Run 'claude-tmux kill -s ${name}' first." >&2 ;;
+      *)
+        echo "Error: unexpected purge error." >&2 ;;
+    esac
+    exit 1
+  fi
+
+  if [[ ${#purged_names[@]} -eq 0 ]]; then
+    if [[ $dry_run -eq 1 ]]; then
+      echo "No killed sessions to purge (dry run)."
+    else
+      echo "No killed sessions to purge."
+    fi
+    return
+  fi
+
+  if [[ $dry_run -eq 1 ]]; then
+    echo "Would purge ${#purged_names[@]} session(s):"
+    for n in "${purged_names[@]}"; do
+      local script="${SCRIPTS_DIR}/${n}.sh"
+      echo "  - ${n}  (registry entry + ${script})"
+    done
+    return
+  fi
+
+  # Remove startup scripts
+  for n in "${purged_names[@]}"; do
+    local script="${SCRIPTS_DIR}/${n}.sh"
+    [[ -f "$script" ]] && rm -f "$script"
+  done
+
+  local joined
+  joined=$(IFS=', '; echo "${purged_names[*]}")
+  echo "Purged ${#purged_names[@]} session(s): ${joined}"
+}
+
 cmd_upgrade() {
   local bin_target
   bin_target="$(command -v claude-tmux 2>/dev/null || echo "${HOME}/.local/bin/claude-tmux")"
@@ -769,6 +887,7 @@ case "$subcmd" in
   url)                  cmd_url "$@" ;;
   restore)              cmd_restore ;;
   kill)                 cmd_kill "$@" ;;
+  purge)                cmd_purge "$@" ;;
   upgrade)              cmd_upgrade ;;
   version|--version|-v) echo "claude-tmux v${VERSION}" ;;
   help|-h|--help)       _usage ;;

@@ -928,7 +928,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.5" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.6" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1264,11 +1264,11 @@ assert_contains "help mentions tmux-handoff"      "tmux-handoff"       "$out"
 assert_contains "help mentions tmux-review"       "tmux-review"        "$out"
 teardown
 
-# ─── 78. version is 0.8.3 ─────────────────────────────────────────────────────
-echo "── 78. version is 0.8.3"
+# ─── 78. version is 0.8.6 ─────────────────────────────────────────────────────
+echo "── 78. version is 0.8.6"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.5" "0.8.5" "$out"
+assert_contains "version is 0.8.6" "0.8.6" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
@@ -1314,6 +1314,104 @@ assert_file_exists "skill file exists" "$skill_file"
 content=$(cat "$skill_file")
 assert_contains "has name frontmatter"        "name: tmux-attach"    "$content"
 assert_contains "mentions claude-tmux attach" "claude-tmux attach"   "$content"
+
+# ─── 84. cmd_purge — purge all killed sessions ────────────────────────────────
+echo "── 84. cmd_purge all killed"
+setup
+# Register two sessions and kill them both
+_source_script
+_ensure_registry
+_register_session "dead-a" "/tmp" "uuid-da" "" ""
+_register_session "dead-b" "/tmp" "uuid-db" "" ""
+_update_session_status "dead-a" "killed"
+_update_session_status "dead-b" "killed"
+# Also create their startup scripts
+touch "${TEST_HOME}/.claude-tmux/scripts/dead-a.sh"
+touch "${TEST_HOME}/.claude-tmux/scripts/dead-b.sh"
+out=$("$CLAUDE_TMUX" purge 2>&1)
+assert_contains "reports purged count"   "Purged 2 session(s)"    "$out"
+assert_contains "reports dead-a"         "dead-a"                 "$out"
+assert_contains "reports dead-b"         "dead-b"                 "$out"
+# Sessions removed from registry
+remaining=$(python3 -c "import json; d=json.load(open('${TEST_HOME}/.claude-tmux/sessions.json')); print(len(d['sessions']))")
+assert_eq "sessions removed from registry" "0" "$remaining"
+# Startup scripts removed
+[[ ! -f "${TEST_HOME}/.claude-tmux/scripts/dead-a.sh" ]] && pass "script dead-a removed" || fail "script dead-a removed"
+[[ ! -f "${TEST_HOME}/.claude-tmux/scripts/dead-b.sh" ]] && pass "script dead-b removed" || fail "script dead-b removed"
+teardown
+
+# ─── 85. cmd_purge — purge single killed session ──────────────────────────────
+echo "── 85. cmd_purge single killed"
+setup
+_source_script
+_ensure_registry
+_register_session "keep-me" "/tmp" "uuid-km" "" ""
+_register_session "kill-me" "/tmp" "uuid-kl" "" ""
+_update_session_status "kill-me" "killed"
+touch "${TEST_HOME}/.claude-tmux/scripts/kill-me.sh"
+out=$("$CLAUDE_TMUX" purge -s kill-me 2>&1)
+assert_contains "reports purged 1"  "Purged 1 session(s)" "$out"
+assert_contains "names kill-me"     "kill-me"             "$out"
+# keep-me still in registry
+remaining=$(python3 -c "import json; d=json.load(open('${TEST_HOME}/.claude-tmux/sessions.json')); print(d['sessions'][0]['name'])")
+assert_eq "keep-me still in registry" "keep-me" "$remaining"
+# script removed
+[[ ! -f "${TEST_HOME}/.claude-tmux/scripts/kill-me.sh" ]] && pass "script kill-me removed" || fail "script kill-me removed"
+teardown
+
+# ─── 86. cmd_purge — dry-run ──────────────────────────────────────────────────
+echo "── 86. cmd_purge dry-run"
+setup
+_source_script
+_ensure_registry
+_register_session "dry-a" "/tmp" "uuid-dry" "" ""
+_update_session_status "dry-a" "killed"
+touch "${TEST_HOME}/.claude-tmux/scripts/dry-a.sh"
+out=$("$CLAUDE_TMUX" purge --dry-run 2>&1)
+assert_contains "dry-run reports would purge" "Would purge" "$out"
+assert_contains "dry-run lists session"       "dry-a"       "$out"
+# Registry unchanged
+remaining=$(python3 -c "import json; d=json.load(open('${TEST_HOME}/.claude-tmux/sessions.json')); print(len(d['sessions']))")
+assert_eq "dry-run leaves registry intact" "1" "$remaining"
+# Script not deleted
+[[ -f "${TEST_HOME}/.claude-tmux/scripts/dry-a.sh" ]] && pass "dry-run leaves script" || fail "dry-run leaves script"
+teardown
+
+# ─── 87. cmd_purge — error on not-found ──────────────────────────────────────
+echo "── 87. cmd_purge error on not-found"
+setup
+_source_script
+_ensure_registry
+out=$("$CLAUDE_TMUX" purge -s ghost 2>&1) || true
+assert_contains "error not-found" "not found in registry" "$out"
+teardown
+
+# ─── 88. cmd_purge — error on not-killed ─────────────────────────────────────
+echo "── 88. cmd_purge error on not-killed"
+setup
+_source_script
+_ensure_registry
+_register_session "alive" "/tmp" "uuid-al" "" ""
+out=$("$CLAUDE_TMUX" purge -s alive 2>&1) || true
+assert_contains "error not-killed"      "not killed"            "$out"
+assert_contains "suggests kill command" "claude-tmux kill"      "$out"
+teardown
+
+# ─── 89. cmd_purge — no killed sessions ──────────────────────────────────────
+echo "── 89. cmd_purge no killed sessions"
+setup
+_source_script
+_ensure_registry
+_register_session "running" "/tmp" "uuid-run" "" ""
+out=$("$CLAUDE_TMUX" purge 2>&1)
+assert_contains "no killed message" "No killed sessions to purge" "$out"
+teardown
+
+# ─── 90. help shows purge ─────────────────────────────────────────────────────
+echo "── 90. help shows purge"
+out=$("$CLAUDE_TMUX" help 2>&1)
+assert_contains "help shows purge command" "purge" "$out"
+assert_contains "help shows dry-run flag"  "--dry-run" "$out"
 
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""
