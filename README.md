@@ -177,6 +177,29 @@ Stops the tmux session and marks it as killed so it won't be restored on reboot.
 
 ---
 
+### `purge` — remove killed sessions from registry
+
+```bash
+claude-tmux purge                    # remove all killed sessions
+claude-tmux purge -s <name>          # remove one specific killed session
+claude-tmux purge --dry-run          # preview what would be removed
+```
+
+Permanently deletes killed session entries from `~/.claude-tmux/sessions.json` and removes their startup scripts. A session must be killed first — `purge` will error if you try to purge an active or live session.
+
+```bash
+# Clean up everything you've killed
+claude-tmux purge
+
+# Preview first
+claude-tmux purge --dry-run
+
+# Purge a specific old session
+claude-tmux purge -s old-spike
+```
+
+---
+
 ### `restore` — bring back sessions after reboot
 
 ```bash

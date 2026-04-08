@@ -3,6 +3,14 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.6] - 2026-04-08
+
+### Added
+- **`claude-tmux purge [-s <name>] [--dry-run]`** — Permanently remove killed sessions from the
+  registry (`~/.claude-tmux/sessions.json`) and their startup scripts. Without `-s`, purges all
+  killed sessions at once. `--dry-run` shows what would be removed without making changes.
+  Errors clearly if the target session is not found or not yet killed.
+
 ## [0.8.5] - 2026-04-08
 
 ### Added
