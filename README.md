@@ -177,6 +177,23 @@ Stops the tmux session and marks it as killed so it won't be restored on reboot.
 
 ---
 
+### `unkill` — revive a killed session
+
+```bash
+claude-tmux unkill -s <name>
+```
+
+Flips a killed session back to `active` so it will be restored on the next login or `claude-tmux restore` call. The Claude conversation UUID is preserved, so `restore` will resume exactly where you left off.
+
+```bash
+claude-tmux unkill -s old-project
+claude-tmux restore             # bring it back immediately
+```
+
+Errors if the session is not found in the registry or is not in a killed state.
+
+---
+
 ### `purge` — remove killed sessions from registry
 
 ```bash

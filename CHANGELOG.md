@@ -3,6 +3,13 @@
 All notable changes to claude-tmux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.8] - 2026-04-09
+
+### Added
+- **`claude-tmux unkill -s <name>`** — Revive a killed session by flipping its status back to
+  `active`. The session will be restored on the next `claude-tmux restore` call or automatically
+  on next login (macOS LaunchAgent). Errors clearly if the session is not found or not killed.
+
 ## [0.8.7] - 2026-04-09
 
 ### Fixed

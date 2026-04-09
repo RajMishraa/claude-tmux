@@ -928,7 +928,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 if [[ "$*" == *"bin/claude-tmux"* ]]; then
-  printf 'VERSION="%s"\n' "0.8.7" > "$outfile"
+  printf 'VERSION="%s"\n' "0.8.8" > "$outfile"
 elif [[ "$*" == *"install.sh"* ]]; then
   echo 'ALL_SKILLS="tmux-new"'
 elif [[ "$*" == *"SKILL.md"* && -n "$outfile" ]]; then
@@ -1264,11 +1264,11 @@ assert_contains "help mentions tmux-handoff"      "tmux-handoff"       "$out"
 assert_contains "help mentions tmux-review"       "tmux-review"        "$out"
 teardown
 
-# ─── 78. version is 0.8.7 ─────────────────────────────────────────────────────
-echo "── 78. version is 0.8.7"
+# ─── 78. version is 0.8.8 ─────────────────────────────────────────────────────
+echo "── 78. version is 0.8.8"
 setup
 out=$("$CLAUDE_TMUX" version)
-assert_contains "version is 0.8.7" "0.8.7" "$out"
+assert_contains "version is 0.8.8" "0.8.8" "$out"
 teardown
 
 # ─── 79. install.sh ALL_SKILLS includes new skills ────────────────────────────
@@ -1412,6 +1412,61 @@ echo "── 90. help shows purge"
 out=$("$CLAUDE_TMUX" help 2>&1)
 assert_contains "help shows purge command" "purge" "$out"
 assert_contains "help shows dry-run flag"  "--dry-run" "$out"
+
+# ─── 91. cmd_unkill — revive a killed session ────────────────────────────────
+echo "── 91. cmd_unkill revives killed session"
+setup
+_source_script
+_ensure_registry
+_register_session "revive-me" "/tmp" "uuid-rv" "" ""
+_update_session_status "revive-me" "killed"
+out=$("$CLAUDE_TMUX" unkill -s revive-me 2>&1)
+assert_contains "reports marked active"  "marked active"      "$out"
+assert_contains "suggests restore"       "claude-tmux restore" "$out"
+status=$(python3 -c "import json; d=json.load(open('${TEST_HOME}/.claude-tmux/sessions.json')); print([s for s in d['sessions'] if s['name']=='revive-me'][0]['status'])")
+assert_eq "status flipped to active" "active" "$status"
+teardown
+
+# ─── 92. cmd_unkill — error on not-found ─────────────────────────────────────
+echo "── 92. cmd_unkill error on not-found"
+setup
+_source_script
+_ensure_registry
+out=$("$CLAUDE_TMUX" unkill -s ghost 2>&1) || true
+assert_contains "error not found" "not found in registry" "$out"
+teardown
+
+# ─── 93. cmd_unkill — error on not-killed (active) ───────────────────────────
+echo "── 93. cmd_unkill error on not-killed"
+setup
+_source_script
+_ensure_registry
+_register_session "alive" "/tmp" "uuid-al" "" ""
+out=$("$CLAUDE_TMUX" unkill -s alive 2>&1) || true
+assert_contains "error not killed" "not killed" "$out"
+teardown
+
+# ─── 94. cmd_unkill then restore ─────────────────────────────────────────────
+echo "── 94. cmd_unkill then restore picks it up"
+setup
+_source_script
+_ensure_registry
+_register_session "comeback" "/tmp" "uuid-cb" "" ""
+_update_session_status "comeback" "killed"
+"$CLAUDE_TMUX" unkill -s comeback >/dev/null 2>&1
+# Verify restore would pick it up (status=active)
+names=$(python3 -c "
+import json
+d=json.load(open('${TEST_HOME}/.claude-tmux/sessions.json'))
+print(' '.join(s['name'] for s in d['sessions'] if s.get('status')=='active'))
+")
+assert_contains "active after unkill for restore" "comeback" "$names"
+teardown
+
+# ─── 95. help shows unkill ───────────────────────────────────────────────────
+echo "── 95. help shows unkill"
+out=$("$CLAUDE_TMUX" help 2>&1)
+assert_contains "help shows unkill command" "unkill" "$out"
 
 # ─── summary ──────────────────────────────────────────────────────────────────
 echo ""

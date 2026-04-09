@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.8.7"
+VERSION="0.8.8"
 GITHUB_RAW="https://raw.githubusercontent.com/RajMishraa/claude-tmux/main"
 SESSIONS_DIR="${HOME}/.claude-tmux"
 SESSIONS_FILE="${SESSIONS_DIR}/sessions.json"
@@ -265,6 +265,7 @@ Usage:
   claude-tmux url -s <name>                      Show/refresh session URL
   claude-tmux restore                            Restore active sessions (runs at login)
   claude-tmux kill -s <name>                     Kill a session
+  claude-tmux unkill -s <name>                   Revive a killed session (mark active)
   claude-tmux purge [-s <name>] [--dry-run]      Remove killed session(s) from registry
   claude-tmux upgrade                            Upgrade to the latest version
   claude-tmux version                            Print version
@@ -686,6 +687,49 @@ cmd_kill() {
   echo "Marked as killed in registry."
 }
 
+cmd_unkill() {
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -s|--session) name="$2"; shift 2 ;;
+      *) echo "Error: unknown option '$1'" >&2; exit 1 ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && { echo "Error: -s <name> is required" >&2; exit 1; }
+  _validate_name "$name"
+  _ensure_registry
+
+  local status
+  status=$(python3 - "$SESSIONS_FILE" "$name" <<'PYEOF'
+import json, sys
+path, name = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+for s in data["sessions"]:
+    if s["name"] == name:
+        print(s.get("status", "unknown"))
+        sys.exit(0)
+print("not_found")
+sys.exit(1)
+PYEOF
+  ) || true
+
+  case "$status" in
+    not_found)
+      echo "Error: session '${name}' not found in registry." >&2
+      exit 1 ;;
+    killed)
+      _update_session_status "$name" "active"
+      echo "Session '${name}' marked active."
+      echo "Run 'claude-tmux restore' to bring it back now, or it will restore automatically on next login." ;;
+    *)
+      echo "Error: session '${name}' is [${status}], not killed." >&2
+      exit 1 ;;
+  esac
+}
+
 cmd_purge() {
   local name="" dry_run=0
 
@@ -894,6 +938,7 @@ case "$subcmd" in
   url)                  cmd_url "$@" ;;
   restore)              cmd_restore ;;
   kill)                 cmd_kill "$@" ;;
+  unkill)               cmd_unkill "$@" ;;
   purge)                cmd_purge "$@" ;;
   upgrade)              cmd_upgrade ;;
   version|--version|-v) echo "claude-tmux v${VERSION}" ;;
